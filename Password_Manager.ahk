@@ -2,7 +2,7 @@
 config_file := "PM settings.ini"
 
 if (not A_IsCompiled)
-    TraySetIcon("D:\Projects\[0] Programs\AHK Icons\Key.ico",,1)
+    TraySetIcon("Key.ico",,1)
 
 if FileExist(config_file) {
     configuration := Map()
