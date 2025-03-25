@@ -17,9 +17,9 @@ if FileExist(config_file) {
 	configuration := Map(
 		"Hotkeys", Map(
 			"1_account_finder_key", "^!Space",
-			"3_username_key", "!u",
-			"4_password_key", "!p",
             "2_lens_key", "!l",
+			"3_username_key", "!u",
+			"4_password_key", "!p"
 		),
 		"Recommendations", Map(
 			"1_recommended_usernames", "",
@@ -30,11 +30,11 @@ if FileExist(config_file) {
 			"2_sync_directory", "# directory to sync your passwords file #"
 		),
         "Lens", Map(
-            "5_lens_save_dimensions", "1",
             "1_lens_width", "150",
             "2_lens_height", "50",
+            "3_lens_border_color", "Teal",
             "4_lens_border_width", "2",
-            "3_lens_border_color", "Teal"
+            "5_lens_save_dimensions", "1"
         )
 	)
 	open_settings()
@@ -47,9 +47,9 @@ password := '`0'
 enable_hotkeys(configuration_hotkeys) {
     HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
         Hotkey(configuration_hotkeys['1_account_finder_key'], find_current_window, 'On')
+        Hotkey(configuration_hotkeys['2_lens_key'], lens, 'On')
         Hotkey(configuration_hotkeys['3_username_key'], (*) => username ? SendText(username) : "", 'On')
         Hotkey(configuration_hotkeys['4_password_key'], (*) => password ? SendText(password) : "", 'On')
-        Hotkey(configuration_hotkeys['2_lens_key'], lens, 'On')
     Hotif
     return
 }
