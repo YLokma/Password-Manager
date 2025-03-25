@@ -84,10 +84,17 @@ or
 - `passwords.csv`: CSV file containing all passwords and accounts (typically exported from Chrome).
 
 ### CSV Format
-The `passwords.csv` file must follow this format:
+The `passwords.csv` file must follow this format without the heding row:
 | App/Website Name | URL             | Username       | Password       |
 |------------------|-----------------|----------------|----------------|
-| Example App      | https://app.com | example_user   | example_pass   |
+| Example_App      | https://app.com | example_user   | example_pass   |
+
+which looks like this:
+```
+Example_App1,https://app1.com,example_user1,example_pass1
+Example_App2,https://app2.com,example_user2,example_pass2
+Example_App3,https://app3.com,example_user3,example_pass3
+```
 
 ## Notes
 
