@@ -37,22 +37,22 @@ if FileExist(config_file) {
             "5_lens_save_dimensions", "1"
         )
 	)
-	open_settings()
 }
-enable_hotkeys(configuration['Hotkeys'])
+if not FileExist(configuration['Files and Sync']['1_passwords_csv_file']) {
+    MsgBox("Please locate your passwords CSV file", "Error: non-existent passwords file")
+    open_settings()
+}
 
 username := '`0'
 password := '`0'
 
-enable_hotkeys(configuration_hotkeys) {
-    HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
-        Hotkey(configuration_hotkeys['1_account_finder_key'], find_current_window, 'On')
-        Hotkey(configuration_hotkeys['2_lens_key'], lens, 'On')
-        Hotkey(configuration_hotkeys['3_username_key'], (*) => username ? SendText(username) : "", 'On')
-        Hotkey(configuration_hotkeys['4_password_key'], (*) => password ? SendText(password) : "", 'On')
-    Hotif
-    return
-}
+HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
+    Hotkey(configuration['Hotkeys']['1_account_finder_key'], find_current_window, 'On')
+    Hotkey(configuration['Hotkeys']['2_lens_key'], lens, 'On')
+    Hotkey(configuration['Hotkeys']['3_username_key'], (*) => username ? SendText(username) : "", 'On')
+    Hotkey(configuration['Hotkeys']['4_password_key'], (*) => password ? SendText(password) : "", 'On')
+Hotif
+
 lens(*) {
     query := OCR_Under_Mouse()
     if not query
@@ -65,12 +65,12 @@ lens(*) {
     if rows {
         if rows == 1
             found := 1
-        else if List_View.GetText(1, 5) > List_View.GetText(2, 5)
+        else if List_View.GetText(1, csv_column_locations["note"]) > List_View.GetText(2, csv_column_locations["note"])
             found := 1
     }
     if found {
         copy_account(1)
-        ToolTip(List_View.GetText(1, 1))
+        ToolTip(List_View.GetText(1, csv_column_locations["name"]))
         SetTimer((*) => ToolTip(), -2000)
     } else
         show()
@@ -106,7 +106,7 @@ open_settings(*) {
     for key, value in configuration['Files and Sync'] {
 		Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline")
 
-		Settings_Gui.AddEdit("wp v" key, value)
+		Settings_Gui.AddEdit("wp Disabled v" key, value).SetFont("s10 bold")
 		browse_button := Settings_Gui.AddButton("wp vbrowse_" key, "Browse")
 		browse_button.OnEvent("Click", browse)
 		browse_button.Description := "Choose the file or folder"
@@ -177,7 +177,6 @@ open_settings(*) {
     }
     submit_configuration(*) {
         global configuration
-        disable_hotkeys(configuration['Hotkeys'])
         new_configuration := Settings_Gui.Submit()
     
         new_configuration.3_lens_border_color := Format("0x{:02X}{:02X}{:02X}", new_configuration.3_lens_border_color_Red, new_configuration.3_lens_border_color_Green, new_configuration.3_lens_border_color_Blue)
@@ -189,25 +188,12 @@ open_settings(*) {
             }
         }
     
-        enable_hotkeys(configuration['Hotkeys'])
-        Settings_Gui.Destroy()
-        global configuration
         for name, section in configuration
             for key, value in section
                     IniWrite(StrReplace(value, "`n", ", "), config_file, name, key)
-    }
-
-    disable_hotkeys(configuration_hotkeys) {
-        HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
-            for key, value in configuration_hotkeys {
-                try Hotkey(value, "Off", "Off")
-            }
-        Hotif
+        Reload()
     }
 }
-
-csv_columns := ["name", "url", "username", "password"]
-list_columns := ["name", "url", "username", "password", "#"]
 
 A_TrayMenu.Delete()
 
@@ -252,7 +238,31 @@ Settings_Button.OnEvent("Click", open_settings)
 Settings_Button.Description := "Open settings"
 GuiButtonIcon(Settings_Button, "shell32.dll", 315, "A4")
 
-List_View := PM_GUI.AddListView("xm w580 h250 c555555 Sort +Grid -Multi -Hdr -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
+while not FileExist(configuration['Files and Sync']['1_passwords_csv_file'])
+    Sleep(50)
+
+default_columns := ["name", "url", "username", "password", "note"]
+csv_columns := []
+csv_column_locations := Map()
+loop read configuration['Files and Sync']['1_passwords_csv_file'] {
+    loop parse A_LoopReadLine, "CSV" {
+        csv_columns.Push(A_LoopField)
+        csv_column_locations[A_LoopField] := A_Index
+    }
+    break
+}
+
+counter := 0
+for def_col in default_columns
+    for col in csv_columns
+        if (def_col = col)
+            counter++
+if (counter != default_columns.Length) {
+    MsgBox("The CSV passwords file must contain the following columns:`n" '"name", "url", "username", "password", "note"', "Error: Invalid CSV file")
+    ExitApp()
+}
+
+List_View := PM_GUI.AddListView("xm w580 h250 c555555 +Grid -Multi -Hdr -E0x200 LV0x4000 LV0x40 LV0x800", csv_columns)
 List_View.OnEvent("ContextMenu", (CtrlObj, Item, *) => show_context_menu(Item))
 List_View.OnEvent("DoubleClick", double_click_account)
 List_View.OnEvent("Click", (*) => (Search_Box.Focus(), Send("{End}")))
@@ -299,13 +309,13 @@ find_current_window(*) {
     if rows {
         if rows == 1
             found := 1
-        else if List_View.GetText(1, 5) > List_View.GetText(2, 5)
+        else if List_View.GetText(1, csv_column_locations["note"]) > List_View.GetText(2, csv_column_locations["note"])
             found := 1
         
         if found {
             copy_account(1)
             
-            ToolTip(List_View.GetText(1, 1))
+            ToolTip(List_View.GetText(1, csv_column_locations["name"]))
             SetTimer((*) => ToolTip(), -2000)
         }
         else
@@ -341,11 +351,21 @@ double_click_account(list, row) {
 }
 
 search()
-List_View.ModifyCol(1, 200)
-List_View.ModifyCol(2, 100)
-List_View.ModifyCol(3, 238)
-List_View.ModifyCol(4, 12)
-List_View.ModifyCol(5, 12)
+for column in csv_columns {
+    switch column {
+        case "name":
+            width := 200
+        case "url":
+            width := 100
+        case "username":
+            width := 238
+        case "password":
+            width := 12
+        case "note":
+            width := 12
+        }
+    List_View.ModifyCol(A_Index, width . (column = "name" ? " Sort" : ""))
+}
 
 #Hotif WinActive("ahk_id " PM_GUI.Hwnd)
 {
@@ -383,22 +403,22 @@ search(query := Search_Box.Text) {
         app_name := "`0"
     
     keywords := StrSplit(query, delimiters)
-    
-    while not FileExist(configuration['Files and Sync']['1_passwords_csv_file'])
-        Sleep(50)
-    
+        
     loop read configuration['Files and Sync']['1_passwords_csv_file'] {
+        if A_Index = 1
+            continue ; skip column headers
+
         current := []
         loop parse A_LoopReadLine, "CSV"
             current.Push(A_LoopField)
-        
+
         relevance := (keywords.Length = 0)
         
-        for word in StrSplit(current[1], delimiters)
+        for word in StrSplit(current[csv_column_locations["name"]], delimiters)
             relevance += (3 * (app_name = word))
         
         for keyword in keywords
-            for word in StrSplit(current[1], delimiters)
+            for word in StrSplit(current[csv_column_locations["name"]], delimiters)
                 if StrLen(keyword) > 0
                     relevance += (Max(InStr(word, keyword) > 0, 2 * (word = keyword))) ; * 2) + (InStr(current[3], word) > 0))
         
@@ -431,8 +451,8 @@ move_selector(displacement) {
 copy_account(row) {
     global username, password
     
-    username := List_View.GetText(row, 3)
-    password := List_View.GetText(row, 4)
+    username := List_View.GetText(row, csv_column_locations["username"])
+    password := List_View.GetText(row, csv_column_locations["password"])
 
     SetTimer(clear_variable, -1000 * 60 * 5)
     clear_variable(*) {
@@ -455,11 +475,12 @@ show_context_menu(row) {
     }
     run_website(ItemName, ItemPos, MyMenu) {
         row := List_View.GetNext(, "F")
-        url := List_View.GetText(row, 2)
+        url := List_View.GetText(row, csv_column_locations["url"])
+        name := List_View.GetText(row, csv_column_locations["name"])
         if (SubStr(url, 1, 4) == "http")
             Run url
         else if MsgBox("URL not found, do you want to search for it?", "Invalid URL", "Y/N") == "Yes"
-                Run "https://www.google.com/search?q=" StrReplace(url, ' ', '+')
+                Run "https://www.google.com/search?q=" StrReplace(name, ' ', '+')
     }
 }
 account_gui(found_account_array := 0) {
@@ -533,7 +554,7 @@ replace_text_in_file(old_text?, new_text?, Filename := configuration['Files and 
         New_File_Text := File_Text . new_text
     
     FileObj := FileOpen(Filename, "w `n")
-    FileObj.Write(Sort(New_File_Text))
+    FileObj.Write(New_File_Text)
     FileObj.Close()
 }
 delete_account(*) {
