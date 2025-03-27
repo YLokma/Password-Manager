@@ -27,7 +27,8 @@ if FileExist(config_file) {
 		),
 		"Files and Sync", Map(
 			"1_passwords_csv_file", "# Please locate your passwords CSV file #",
-			"2_sync_directory", "# directory to sync your passwords file #"
+			"2_sync_directory", "# directory to sync your passwords file #",
+            "3_show_relevance", "0"
 		),
         "Lens", Map(
             "1_lens_width", "150",
@@ -65,7 +66,7 @@ lens(*) {
     if rows {
         if rows == 1
             found := 1
-        else if List_View.GetText(1, csv_column_locations["note"]) > List_View.GetText(2, csv_column_locations["note"])
+        else if List_View.GetText(1, List_View.Length) > List_View.GetText(2, List_View.Length)
             found := 1
     }
     if found {
@@ -106,11 +107,15 @@ open_settings(*) {
     for key, value in configuration['Files and Sync'] {
 		Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline")
 
-		Settings_Gui.AddEdit("wp Disabled v" key, value).SetFont("s10 bold")
-		browse_button := Settings_Gui.AddButton("wp vbrowse_" key, "Browse")
-		browse_button.OnEvent("Click", browse)
-		browse_button.Description := "Choose the file or folder"
-		GuiButtonIcon(browse_button, "shell32.dll", 46, "s20 R80 A4")
+        if key = "3_show_relevance"
+            Settings_Gui.AddCheckbox("wp v" key " " (value ? "Checked" : ""), "Show search relevance")
+        else {
+            Settings_Gui.AddEdit("wp Disabled v" key, value).SetFont("s10 bold")
+            browse_button := Settings_Gui.AddButton("wp vbrowse_" key, "Browse")
+            browse_button.OnEvent("Click", browse)
+            browse_button.Description := "Choose the file or folder"
+            GuiButtonIcon(browse_button, "shell32.dll", 46, "s20 R80 A4")
+        }
     }
 
     Tabs.UseTab('Lens')
@@ -135,7 +140,6 @@ open_settings(*) {
                 Settings_Gui.AddUpDown("Range0-1000 Wrap", value)
             }
         }
-
     }
 
     Tabs.UseTab(0)
@@ -242,27 +246,36 @@ while not FileExist(configuration['Files and Sync']['1_passwords_csv_file'])
     Sleep(50)
 
 default_columns := ["name", "url", "username", "password", "note"]
-csv_columns := []
-csv_column_locations := Map()
+csv_columns := [], list_columns := [], csv_column_locations := Map()
 loop read configuration['Files and Sync']['1_passwords_csv_file'] {
     loop parse A_LoopReadLine, "CSV" {
         csv_columns.Push(A_LoopField)
+        list_columns.Push(A_LoopField)
         csv_column_locations[A_LoopField] := A_Index
     }
     break
 }
+list_columns.Push("relevance")
 
 counter := 0
-for def_col in default_columns
+for def_col in default_columns {
+    if def_col = "note" {
+        counter++
+        continue
+    }
+
     for col in csv_columns
         if (def_col = col)
             counter++
+}
 if (counter != default_columns.Length) {
-    MsgBox("The CSV passwords file must contain the following columns:`n" '"name", "url", "username", "password", "note"', "Error: Invalid CSV file")
+    MsgBox("The CSV passwords file must contain the following columns:`n" '"name", "url", "username", "password", "note" (optional)', "Error: Invalid CSV file")
     ExitApp()
 }
 
-List_View := PM_GUI.AddListView("xm w580 h250 c555555 +Grid -Multi -Hdr -E0x200 LV0x4000 LV0x40 LV0x800", csv_columns)
+List_View := PM_GUI.AddListView("xm w580 h250 c555555 +Grid -Multi -Hdr -E0x200 LV0x4000 LV0x40 LV0x800", 
+    (configuration['Files and Sync']['3_show_relevance'] ? list_columns : csv_columns)
+)
 List_View.OnEvent("ContextMenu", (CtrlObj, Item, *) => show_context_menu(Item))
 List_View.OnEvent("DoubleClick", double_click_account)
 List_View.OnEvent("Click", (*) => (Search_Box.Focus(), Send("{End}")))
@@ -309,7 +322,7 @@ find_current_window(*) {
     if rows {
         if rows == 1
             found := 1
-        else if List_View.GetText(1, csv_column_locations["note"]) > List_View.GetText(2, csv_column_locations["note"])
+        else if List_View.GetText(1, list_columns.Length) > List_View.GetText(2, list_columns.Length)
             found := 1
         
         if found {
@@ -351,17 +364,19 @@ double_click_account(list, row) {
 }
 
 search()
-for column in csv_columns {
+for column in list_columns {
     switch column {
         case "name":
             width := 200
         case "url":
             width := 100
         case "username":
-            width := 238
+            width := 200
         case "password":
             width := 12
         case "note":
+            width := (configuration['Files and Sync']['3_show_relevance'] ? 38 : 50)
+        case "relevance":
             width := 12
         }
     List_View.ModifyCol(A_Index, width . (column = "name" ? " Sort" : ""))
@@ -421,13 +436,13 @@ search(query := Search_Box.Text) {
             for word in StrSplit(current[csv_column_locations["name"]], delimiters)
                 if StrLen(keyword) > 0
                     relevance += (Max(InStr(word, keyword) > 0, 2 * (word = keyword))) ; * 2) + (InStr(current[3], word) > 0))
-        
+        current.Push(relevance)
         if relevance
-            List_View.Add(, current[1], current[2], current[3], current[4], relevance)
+            List_View.Add(, current*)
     }
 
     if keywords.Length > 0
-        List_View.ModifyCol(5, "Integer SortDesc")
+        List_View.ModifyCol(list_columns.Length, "Integer SortDesc")
     
     List_View.Modify(1, "Focus Select")
     List_View.Opt("+Redraw")
@@ -534,8 +549,7 @@ csv_format(source) {
     
     for column in csv_columns {
         if IsNumber(source) {
-            if A_Index != csv_column_locations["note"]
-                formatted_text .= List_View.GetText(source, A_Index)
+            formatted_text .= List_View.GetText(source, A_Index)
         }
         else if IsObject(source)
             formatted_text .= source.%column%

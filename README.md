@@ -84,17 +84,20 @@ or
 - `passwords.csv`: CSV file containing all passwords and accounts (typically exported from Chrome).
 
 ### CSV Format
-The `passwords.csv` file must follow this format without the heding row:
-| App/Website Name | URL             | Username       | Password       |
-|------------------|-----------------|----------------|----------------|
-| Example_App      | https://app.com | example_user   | example_pass   |
+The `passwords.csv` file should follow this format:
+| App/Website Name | URL             | Username       | Password       | Note (Optional)|
+|------------------|-----------------|----------------|----------------|----------------|
+| Example_App      | https://app.com | example_user   | example_pass   | Optional note  |
 
-which looks like this:
+The file should look like this:
 ```
-Example_App1,https://app1.com,example_user1,example_pass1
-Example_App2,https://app2.com,example_user2,example_pass2
-Example_App3,https://app3.com,example_user3,example_pass3
+name,url,username,password,note
+Example_App1,https://app1.com,example_user1,example_pass1,This is a note
+Example_App2,https://app2.com,example_user2,example_pass2,Another note
+Example_App3,https://app3.com,example_user3,example_pass3,
 ```
+- the columns can be rearranged, which wil be reflected in the list view columns order
+- the note column is entirely optional and can be removed from the file
 
 ## Notes
 
