@@ -47,13 +47,13 @@ if not FileExist(configuration['Files and Sync']['1_passwords_csv_file']) {
 username := '`0'
 password := '`0'
 
-HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
-    Hotkey(configuration['Hotkeys']['1_account_finder_key'], find_current_window, 'On')
-    Hotkey(configuration['Hotkeys']['2_lens_key'], lens, 'On')
-    Hotkey(configuration['Hotkeys']['3_username_key'], (*) => username ? SendText(username) : "", 'On')
-    Hotkey(configuration['Hotkeys']['4_password_key'], (*) => password ? SendText(password) : "", 'On')
-Hotif
+delete_word(*) {
+    if not Search_Box.Focused
+        Search_Box.Focus()
 
+    Send '^{Left}'
+    Send '^{Delete}'
+}
 lens(*) {
     query := OCR_Under_Mouse()
     if not query
@@ -219,6 +219,21 @@ PM_GUI.BackColor := 'White'
 PM_GUI.SetFont("s10", 'Consolas')
 PM_GUI.OnEvent("Escape", (*) => (ToolTip(), PM_GUI.Hide()))
 
+HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
+    Hotkey(configuration['Hotkeys']['1_account_finder_key'], find_current_window)
+    Hotkey(configuration['Hotkeys']['2_lens_key'], lens)
+    Hotkey(configuration['Hotkeys']['3_username_key'], (*) => username ? SendText(username) : "")
+    Hotkey(configuration['Hotkeys']['4_password_key'], (*) => password ? SendText(password) : "")
+HotIfWinActive("ahk_id " PM_GUI.Hwnd)
+    Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F")), PM_GUI.Hide()))
+    Hotkey('F2', (*) => account_gui(StrSplit(csv_format(List_View.GetNext(, "F")), ',', '`r`n')))
+    Hotkey('+Delete', delete_account)
+    Hotkey('Up', (*) => move_selector(-1))
+    Hotkey('Down', (*) => move_selector(+1))
+    Hotkey('^a', (*) => Search_Box.Focus())
+    Hotkey('^BackSpace', delete_word)
+HotIf
+
 Search_Button := PM_GUI.AddButton("w25 h23 Default", '')
 Search_Button.OnEvent("Click", (*) => (PM_GUI.Hide(), WinActivate(StrSplit(list_all_windows()[1], " -> ")[2]), find_current_window()))
 Search_Button.Description := "Search for an account"
@@ -273,12 +288,29 @@ if (counter != default_columns.Length) {
     ExitApp()
 }
 
-List_View := PM_GUI.AddListView("xm w580 h250 c555555 +Grid -Multi -Hdr -E0x200 LV0x4000 LV0x40 LV0x800", 
-    (configuration['Files and Sync']['3_show_relevance'] ? list_columns : csv_columns)
-)
+List_View := PM_GUI.AddListView("xm w580 h250 c555555 +Grid -Multi -Hdr -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
 List_View.OnEvent("ContextMenu", (CtrlObj, Item, *) => show_context_menu(Item))
 List_View.OnEvent("DoubleClick", double_click_account)
 List_View.OnEvent("Click", (*) => (Search_Box.Focus(), Send("{End}")))
+
+search()
+for column in list_columns {
+    switch column {
+        case "name":
+            width := 200
+        case "url":
+            width := 100
+        case "username":
+            width := 200
+        case "password":
+            width := 13
+        case "note":
+            width := (configuration['Files and Sync']['3_show_relevance'] ? 25 : 45)
+        case "relevance":
+            width := (configuration['Files and Sync']['3_show_relevance'] ? 25 : 5)
+        }
+    List_View.ModifyCol(A_Index, width . (column = "name" ? " Sort" : ""))
+}
 
 list_all_windows(*) {
     window_IDs := WinGetList()
@@ -362,45 +394,6 @@ double_click_account(list, row) {
     copy_account(row)
     PM_GUI.Hide()
 }
-
-search()
-for column in list_columns {
-    switch column {
-        case "name":
-            width := 200
-        case "url":
-            width := 100
-        case "username":
-            width := 200
-        case "password":
-            width := 12
-        case "note":
-            width := (configuration['Files and Sync']['3_show_relevance'] ? 38 : 50)
-        case "relevance":
-            width := 12
-        }
-    List_View.ModifyCol(A_Index, width . (column = "name" ? " Sort" : ""))
-}
-
-#Hotif WinActive("ahk_id " PM_GUI.Hwnd)
-{
-    Enter:: {
-        copy_account(List_View.GetNext(, "F"))
-        PM_GUI.Hide()
-    }
-    Up::   move_selector(-1)
-    Down:: move_selector(+1)
-    ^BackSpace:: {
-        if not Search_Box.Focused
-            Search_Box.Focus()
-
-        Send '^{Left}'
-        Send '^{Delete}'
-    }
-    ^a:: Search_Box.Focus()
-    Del:: delete_account()
-}
-#HotIf
 
 ; -----------------------------------------------------------------------
 
