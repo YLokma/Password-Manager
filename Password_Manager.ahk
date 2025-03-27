@@ -533,13 +533,15 @@ csv_format(source) {
     formatted_text := ""
     
     for column in csv_columns {
-        if IsInteger(source)
-            formatted_text .= List_View.GetText(source, A_Index)
+        if IsNumber(source) {
+            if A_Index != csv_column_locations["note"]
+                formatted_text .= List_View.GetText(source, A_Index)
+        }
         else if IsObject(source)
             formatted_text .= source.%column%
         else
             return
-        
+                
         if (A_Index < csv_columns.Length)
             formatted_text .= ','
     }
