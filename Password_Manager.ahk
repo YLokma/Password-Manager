@@ -25,27 +25,148 @@ if FileExist(config_file) {
 			"1_recommended_usernames", "",
 			"2_recommended_passwords", ""
 		),
-		"Files and Sync", Map(
+		"Settings", Map(
 			"1_passwords_csv_file", "# Please locate your passwords CSV file #",
 			"2_sync_directory", "# directory to sync your passwords file #",
-            "3_show_relevance", "0"
+            "3_show_relevance?", "0",
+            "4_show_on_startup?", "1"
 		),
         "Lens", Map(
             "1_lens_width", "150",
             "2_lens_height", "50",
             "3_lens_border_color", "Teal",
             "4_lens_border_width", "2",
-            "5_lens_save_dimensions", "1"
+            "5_save_lens_dimensions?", "1"
         )
 	)
 }
-if not FileExist(configuration['Files and Sync']['1_passwords_csv_file']) {
+if not FileExist(configuration['Settings']['1_passwords_csv_file']) {
     MsgBox("Please locate your passwords CSV file", "Error: non-existent passwords file")
     open_settings()
 }
 
 username := '`0'
 password := '`0'
+
+A_TrayMenu.Delete()
+
+Standard_Menu := Menu()
+Standard_Menu.AddStandard()
+
+A_TrayMenu.Add("Standard", Standard_Menu)
+A_TrayMenu.Add()
+A_TrayMenu.Add("Password Manager", (*) => (list_all_windows(), show()))
+A_TrayMenu.Add("Find this account", find_current_window)
+A_TrayMenu.Add("Lens", lens)
+; A_TrayMenu.Add("OCR", OCR_Under_Mouse)
+A_TrayMenu.Add("Settings", open_settings)
+A_TrayMenu.Default := "Password Manager"
+A_TrayMenu.ClickCount := 1
+
+PM_GUI := Gui("-MaximizeBox -MinimizeBox", "Password Manager")
+PM_GUI.BackColor := 'White'
+PM_GUI.SetFont("s10", 'Consolas')
+PM_GUI.OnEvent("Escape", (*) => (ToolTip(), PM_GUI.Hide()))
+
+HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
+    Hotkey(configuration['Hotkeys']['1_account_finder_key'], find_current_window)
+    Hotkey(configuration['Hotkeys']['2_lens_key'], lens)
+    Hotkey(configuration['Hotkeys']['3_username_key'], (*) => username ? SendText(username) : "")
+    Hotkey(configuration['Hotkeys']['4_password_key'], (*) => password ? SendText(password) : "")
+HotIfWinActive("ahk_id " PM_GUI.Hwnd)
+    Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F")), PM_GUI.Hide()))
+    Hotkey('F2', (*) => account_gui(StrSplit(csv_format(List_View.GetNext(, "F")), ',', '`r`n')))
+    Hotkey('+Delete', delete_account)
+    Hotkey('Up', (*) => move_selector(-1))
+    Hotkey('Down', (*) => move_selector(+1))
+    Hotkey('^a', (*) => Search_Box.Focus())
+    Hotkey('^BackSpace', delete_word)
+HotIf
+
+Search_Button := PM_GUI.AddButton("w25 h23 Default", '')
+Search_Button.OnEvent("Click", (*) => (PM_GUI.Hide(), WinActivate(StrSplit(list_all_windows()[1], " -> ")[2]), find_current_window()))
+Search_Button.Description := "Search for an account"
+GuiButtonIcon(Search_Button, "shell32.dll", 23, "A4")
+
+; Reset_Button := PM_GUI.AddButton("w25 h23 yp", '')
+; Reset_Button.OnEvent("Click", (*) => search())
+; Reset_Button.Description := "Reset current view"
+; GuiButtonIcon(Reset_Button, "shell32.dll", 239, "A4")
+
+Search_Box := PM_GUI.AddComboBox("w485 yp vSearch_Box")
+Search_Box.Description := "Enter your search query"
+Search_Box.OnEvent("Change", (*) => search())
+
+Add_Button := PM_GUI.AddButton("w25 h23 yp", '')
+Add_Button.OnEvent("Click", (*) => account_gui())
+Add_Button.Description := "Add a new account"
+GuiButtonIcon(Add_Button, "shell32.dll", 270, "A4")
+Settings_Button := PM_GUI.AddButton("w25 h23 yp", '')
+Settings_Button.OnEvent("Click", open_settings)
+Settings_Button.Description := "Open settings"
+GuiButtonIcon(Settings_Button, "shell32.dll", 315, "A4")
+
+while not FileExist(configuration['Settings']['1_passwords_csv_file'])
+    Sleep(50)
+
+default_columns := ["name", "url", "username", "password", "note"]
+csv_columns := [], list_columns := [], csv_column_locations := Map()
+loop read configuration['Settings']['1_passwords_csv_file'] {
+    loop parse A_LoopReadLine, "CSV" {
+        csv_columns.Push(A_LoopField)
+        list_columns.Push(A_LoopField)
+        csv_column_locations[A_LoopField] := A_Index
+    }
+    break
+}
+list_columns.Push("relevance")
+
+counter := 0
+for def_col in default_columns {
+    if def_col = "note" {
+        counter++
+        continue
+    }
+
+    for col in csv_columns
+        if (def_col = col)
+            counter++
+}
+if (counter != default_columns.Length) {
+    MsgBox("The CSV passwords file must contain the following columns:`n" '"name", "url", "username", "password", "note" (optional)', "Error: Invalid CSV file")
+    ExitApp()
+}
+
+List_View := PM_GUI.AddListView("xm w580 h250 c555555 +Grid -Multi -Hdr -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
+List_View.OnEvent("ContextMenu", (CtrlObj, Item, *) => show_context_menu(Item))
+List_View.OnEvent("DoubleClick", double_click_account)
+List_View.OnEvent("Click", (*) => (Search_Box.Focus(), Send("{End}")))
+
+search()
+for column in list_columns {
+    switch column {
+        case "name":
+            width := 200
+        case "url":
+            width := 100
+        case "username":
+            width := 200
+        case "password":
+            width := 13
+        case "note":
+            width := (configuration['Settings']['3_show_relevance?'] ? 25 : 45)
+        case "relevance":
+            width := (configuration['Settings']['3_show_relevance?'] ? 25 : 5)
+        }
+    List_View.ModifyCol(A_Index, width . (column = "name" ? " Sort" : ""))
+}
+
+if (configuration['Settings']['4_show_on_startup?'])
+    show()
+
+; =============================================================================
+; --------------------------------- FUNCTIONS ---------------------------------
+; =============================================================================
 
 delete_word(*) {
     if not Search_Box.Focused
@@ -58,7 +179,7 @@ lens(*) {
     query := OCR_Under_Mouse()
     if not query
         return
-
+  
     Search_Box.Text := query
     rows := search()
     
@@ -100,16 +221,15 @@ open_settings(*) {
 		Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline")
 
 		text := StrReplace(value, ", ", "`n")
-		Settings_Gui.AddEdit("wp r11 v" key, text)
+		Settings_Gui.AddEdit("wp r10 v" key, text)
     }
 
-	Tabs.UseTab('Files and Sync')
-    for key, value in configuration['Files and Sync'] {
-		Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline")
-
-        if key = "3_show_relevance"
-            Settings_Gui.AddCheckbox("wp v" key " " (value ? "Checked" : ""), "Show search relevance")
+	Tabs.UseTab('Settings')
+    for key, value in configuration['Settings'] {
+        if InStr(key, "?")
+            Settings_Gui.AddCheckbox("wp v" key " " (value ? "Checked" : ""), format_key_name(key)).SetFont("underline")
         else {
+            Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline")
             Settings_Gui.AddEdit("wp Disabled v" key, value).SetFont("s10 bold")
             browse_button := Settings_Gui.AddButton("wp vbrowse_" key, "Browse")
             browse_button.OnEvent("Click", browse)
@@ -132,10 +252,10 @@ open_settings(*) {
             }
         }
         else {
-            Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline")
-            if InStr(key, "lens_save_dimensions") ; 5_lens_save_dimensions
-                Settings_Gui.AddCheckbox("wp v" key " " (value ? "Checked" : ""), "Save lens dimensions")
-            else {
+            if InStr(key, "?") ; 5_save_lens_dimensions?
+                Settings_Gui.AddCheckbox("wp v" key " " (value ? "Checked" : ""), format_key_name(key)).SetFont("underline")
+        else {
+                Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline")
                 Settings_Gui.AddEdit("wp v" key, value)
                 Settings_Gui.AddUpDown("Range0-1000 Wrap", value)
             }
@@ -197,119 +317,6 @@ open_settings(*) {
                     IniWrite(StrReplace(value, "`n", ", "), config_file, name, key)
         Reload()
     }
-}
-
-A_TrayMenu.Delete()
-
-Standard_Menu := Menu()
-Standard_Menu.AddStandard()
-
-A_TrayMenu.Add("Standard", Standard_Menu)
-A_TrayMenu.Add()
-A_TrayMenu.Add("Password Manager", (*) => (list_all_windows(), show()))
-A_TrayMenu.Add("Find this account", find_current_window)
-A_TrayMenu.Add("Lens", lens)
-; A_TrayMenu.Add("OCR", OCR_Under_Mouse)
-A_TrayMenu.Add("Settings", open_settings)
-A_TrayMenu.Default := "Password Manager"
-A_TrayMenu.ClickCount := 1
-
-PM_GUI := Gui("-MaximizeBox -MinimizeBox", "Password Manager")
-PM_GUI.BackColor := 'White'
-PM_GUI.SetFont("s10", 'Consolas')
-PM_GUI.OnEvent("Escape", (*) => (ToolTip(), PM_GUI.Hide()))
-
-HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
-    Hotkey(configuration['Hotkeys']['1_account_finder_key'], find_current_window)
-    Hotkey(configuration['Hotkeys']['2_lens_key'], lens)
-    Hotkey(configuration['Hotkeys']['3_username_key'], (*) => username ? SendText(username) : "")
-    Hotkey(configuration['Hotkeys']['4_password_key'], (*) => password ? SendText(password) : "")
-HotIfWinActive("ahk_id " PM_GUI.Hwnd)
-    Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F")), PM_GUI.Hide()))
-    Hotkey('F2', (*) => account_gui(StrSplit(csv_format(List_View.GetNext(, "F")), ',', '`r`n')))
-    Hotkey('+Delete', delete_account)
-    Hotkey('Up', (*) => move_selector(-1))
-    Hotkey('Down', (*) => move_selector(+1))
-    Hotkey('^a', (*) => Search_Box.Focus())
-    Hotkey('^BackSpace', delete_word)
-HotIf
-
-Search_Button := PM_GUI.AddButton("w25 h23 Default", '')
-Search_Button.OnEvent("Click", (*) => (PM_GUI.Hide(), WinActivate(StrSplit(list_all_windows()[1], " -> ")[2]), find_current_window()))
-Search_Button.Description := "Search for an account"
-GuiButtonIcon(Search_Button, "shell32.dll", 23, "A4")
-
-; Reset_Button := PM_GUI.AddButton("w25 h23 yp", '')
-; Reset_Button.OnEvent("Click", (*) => search())
-; Reset_Button.Description := "Reset current view"
-; GuiButtonIcon(Reset_Button, "shell32.dll", 239, "A4")
-
-Search_Box := PM_GUI.AddComboBox("w485 yp vSearch_Box")
-Search_Box.Description := "Enter your search query"
-Search_Box.OnEvent("Change", (*) => search())
-
-Add_Button := PM_GUI.AddButton("w25 h23 yp", '')
-Add_Button.OnEvent("Click", (*) => account_gui())
-Add_Button.Description := "Add a new account"
-GuiButtonIcon(Add_Button, "shell32.dll", 270, "A4")
-Settings_Button := PM_GUI.AddButton("w25 h23 yp", '')
-Settings_Button.OnEvent("Click", open_settings)
-Settings_Button.Description := "Open settings"
-GuiButtonIcon(Settings_Button, "shell32.dll", 315, "A4")
-
-while not FileExist(configuration['Files and Sync']['1_passwords_csv_file'])
-    Sleep(50)
-
-default_columns := ["name", "url", "username", "password", "note"]
-csv_columns := [], list_columns := [], csv_column_locations := Map()
-loop read configuration['Files and Sync']['1_passwords_csv_file'] {
-    loop parse A_LoopReadLine, "CSV" {
-        csv_columns.Push(A_LoopField)
-        list_columns.Push(A_LoopField)
-        csv_column_locations[A_LoopField] := A_Index
-    }
-    break
-}
-list_columns.Push("relevance")
-
-counter := 0
-for def_col in default_columns {
-    if def_col = "note" {
-        counter++
-        continue
-    }
-
-    for col in csv_columns
-        if (def_col = col)
-            counter++
-}
-if (counter != default_columns.Length) {
-    MsgBox("The CSV passwords file must contain the following columns:`n" '"name", "url", "username", "password", "note" (optional)', "Error: Invalid CSV file")
-    ExitApp()
-}
-
-List_View := PM_GUI.AddListView("xm w580 h250 c555555 +Grid -Multi -Hdr -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
-List_View.OnEvent("ContextMenu", (CtrlObj, Item, *) => show_context_menu(Item))
-List_View.OnEvent("DoubleClick", double_click_account)
-List_View.OnEvent("Click", (*) => (Search_Box.Focus(), Send("{End}")))
-
-search()
-for column in list_columns {
-    switch column {
-        case "name":
-            width := 200
-        case "url":
-            width := 100
-        case "username":
-            width := 200
-        case "password":
-            width := 13
-        case "note":
-            width := (configuration['Files and Sync']['3_show_relevance'] ? 25 : 45)
-        case "relevance":
-            width := (configuration['Files and Sync']['3_show_relevance'] ? 25 : 5)
-        }
-    List_View.ModifyCol(A_Index, width . (column = "name" ? " Sort" : ""))
 }
 
 list_all_windows(*) {
@@ -412,7 +419,7 @@ search(query := Search_Box.Text) {
     
     keywords := StrSplit(query, delimiters)
         
-    loop read configuration['Files and Sync']['1_passwords_csv_file'] {
+    loop read configuration['Settings']['1_passwords_csv_file'] {
         if A_Index = 1
             continue ; skip column headers
 
@@ -555,7 +562,7 @@ csv_format(source) {
     formatted_text .= "`r`n"
     return formatted_text
 }
-replace_text_in_file(old_text?, new_text?, Filename := configuration['Files and Sync']['1_passwords_csv_file']) {
+replace_text_in_file(old_text?, new_text?, Filename := configuration['Settings']['1_passwords_csv_file']) {
     File_Text := FileRead(Filename)
     if IsSet(old_text)
         New_File_Text := StrReplace(File_Text, old_text, new_text, true,, 1)
@@ -575,7 +582,7 @@ delete_account(*) {
     sync_file()
     search()
 }
-sync_file(Filename := configuration['Files and Sync']['1_passwords_csv_file'], destination := configuration['Files and Sync']['2_sync_directory']) {
+sync_file(Filename := configuration['Settings']['1_passwords_csv_file'], destination := configuration['Settings']['2_sync_directory']) {
     if DirExist(destination)
         FileCopy(Filename, destination, true)
 }
