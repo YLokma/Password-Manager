@@ -29,7 +29,8 @@ if FileExist(config_file) {
 			"1_passwords_csv_file", "# Please locate your passwords CSV file #",
 			"2_sync_directory", "# directory to sync your passwords file #",
             "3_show_relevance?", "0",
-            "4_show_on_startup?", "1"
+            "4_show_on_launch?", "1",
+            "5_run_on_system_startup?", "0"
 		),
         "Lens", Map(
             "1_lens_width", "150",
@@ -45,6 +46,11 @@ if not FileExist(configuration['Settings']['1_passwords_csv_file']) {
     open_settings()
 }
 
+if configuration['Settings']['5_run_on_system_startup?'] {
+    FileCreateShortcut(A_ScriptFullPath, A_Startup '\' RegExReplace(A_ScriptName, "\..*$", ".lnk"), , , , A_IsCompiled ? A_ScriptFullPath : A_IconFile)
+} else {
+    FileDelete(A_Startup '\' RegExReplace(A_ScriptName, "\..*$", ".lnk"))
+}
 username := '`0'
 password := '`0'
 
@@ -161,7 +167,7 @@ for column in list_columns {
     List_View.ModifyCol(A_Index, width . (column = "name" ? " Sort" : ""))
 }
 
-if (configuration['Settings']['4_show_on_startup?'])
+if (configuration['Settings']['4_show_on_launch?'])
     show()
 
 ; =============================================================================
@@ -587,10 +593,9 @@ sync_file(Filename := configuration['Settings']['1_passwords_csv_file'], destina
         FileCopy(Filename, destination, true)
 }
 
-; https://renenyffenegger.ch/development/Windows/PowerShell/examples/WinAPI/ExtractIconEx/shell32.html
-
-GuiButtonIcon(Handle, File, Index := 1, Options := '')
-{
+; source: https://www.autohotkey.com/boards/viewtopic.php?f=83&t=115871
+; useful resource to find icon number: https://renenyffenegger.ch/development/Windows/PowerShell/examples/WinAPI/ExtractIconEx/shell32.html
+GuiButtonIcon(Handle, File, Index := 1, Options := '') {
 	RegExMatch(Options, 'i)w\K\d+', &W) ? W := W.0 : W := 16
 	RegExMatch(Options, 'i)h\K\d+', &H) ? H := H.0 : H := 16
 	RegExMatch(Options, 'i)s\K\d+', &S) ? W := H := S.0 : ''
