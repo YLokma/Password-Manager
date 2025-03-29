@@ -218,13 +218,13 @@ open_settings(*) {
 
 	Tabs.UseTab('Hotkeys')
     for key, value in configuration['Hotkeys'] {
-        Settings_Gui.AddText("w300", format_key_name(key)).SetFont("underline")
+        Settings_Gui.AddText("w300", format_key_name(key)).SetFont("underline bold")
 		Settings_Gui.AddHotkey('wp v' key, value)
     }
 
 	Tabs.UseTab('Recommendations')
     for key, value in configuration['Recommendations'] {
-		Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline")
+		Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline bold")
 
 		text := StrReplace(value, ", ", "`n")
 		Settings_Gui.AddEdit("wp r10 v" key, text)
@@ -233,9 +233,9 @@ open_settings(*) {
 	Tabs.UseTab('Settings')
     for key, value in configuration['Settings'] {
         if InStr(key, "?")
-            Settings_Gui.AddCheckbox("wp v" key " " (value ? "Checked" : ""), format_key_name(key)).SetFont("underline")
+            Settings_Gui.AddCheckbox("wp v" key " " (value ? "Checked" : ""), format_key_name(key)).SetFont("underline bold")
         else {
-            Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline")
+            Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline bold")
             Settings_Gui.AddEdit("wp Disabled v" key, value).SetFont("s10 bold")
             browse_button := Settings_Gui.AddButton("wp vbrowse_" key, "Browse")
             browse_button.OnEvent("Click", browse)
@@ -252,16 +252,23 @@ open_settings(*) {
             color_demo := Settings_Gui.AddProgress("wp Range0-1 c" value, 1)
 
             for col in ["Red", "Green", "Blue"] {
-                slider := Settings_Gui.AddSlider("wp Center AltSubmit v" key "_" col " Range0-255 ToolTip", "0X" SubStr(value, 1 + (A_Index * 2), 2))
+                slider := Settings_Gui.AddSlider("wp NoTicks AltSubmit v" key "_" col " Range0-255", "0X" SubStr(value, 1 + (A_Index * 2), 2))
                 slider.OnEvent("Change", update_color)
                 slider.Description := col
             }
         }
         else {
             if InStr(key, "?") ; 5_save_lens_dimensions?
-                Settings_Gui.AddCheckbox("wp v" key " " (value ? "Checked" : ""), format_key_name(key)).SetFont("underline")
-        else {
-                Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline")
+                Settings_Gui.AddCheckbox("wp v" key " " (value ? "Checked" : ""), format_key_name(key)).SetFont("underline bold")
+            else if InStr(key, "border_width") {
+                thickness_demo := Settings_Gui.AddText("wp v" key "_demo", format_key_name(key) ": " value)
+                thickness_demo.SetFont("underline bold")
+                thickness_slider := Settings_Gui.AddSlider("wp AltSubmit v" key " Range0-15 NoTicks", value)
+                thickness_slider.OnEvent("Change", update_thickness)
+                thickness_slider.Description := format_key_name(key)
+            }
+            else {
+                Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline bold")
                 Settings_Gui.AddEdit("wp v" key, value)
                 Settings_Gui.AddUpDown("Range0-1000 Wrap", value)
             }
@@ -304,6 +311,9 @@ open_settings(*) {
         color_demo.Opt("c" code)
         color_code.Text := "Lens Border Color: 0x" code
         return code
+    }
+    update_thickness(*) {
+        thickness_demo.Text := format_key_name(thickness_slider.Name) ": " thickness_slider.Value
     }
     submit_configuration(*) {
         global configuration
@@ -522,7 +532,7 @@ account_gui(found_account_array := 0) {
 	Recommendations["password"].Push(StrSplit(configuration['Recommendations']['2_recommended_passwords'], ", ")*)
 
     for column in csv_columns {
-        New_Account_GUI.AddText("xm w200", column).SetFont("underline")
+        New_Account_GUI.AddText("xm w200", column).SetFont("underline bold")
         New_Account_GUI.AddComboBox("xm wp v" column, Recommendations[column])
         if found_account_array
             New_Account_GUI[column].Value := 1

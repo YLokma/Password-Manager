@@ -12,6 +12,8 @@ This is a feature-rich Password Manager built using AutoHotkey (AHK). It allows 
 - **Context Menu**: Perform actions like visiting the website or modifying/deleting an account, directly from the list view.
 - **Search Functionality**: Search for accounts using keywords, website domains, application names, or OCR-extracted text with improved relevance scoring.
 - **Find Current Account**: Automatically locate the account associated with the current application or website.
+- **Run on System Startup**: Optionally enable the program to run automatically when the system starts.
+- **Show on Launch**: Optionally display the Password Manager GUI immediately after launching the program.
 
 ## How It Works
 
@@ -20,6 +22,7 @@ The program reads its configuration from an `.ini` file (`PM settings.ini`). If 
 - Hotkeys for various actions.
 - File paths for the password CSV file and sync directory.
 - Lens dimensions, border color, and appearance.
+- Options to run on system startup and show the GUI on launch.
 
 ### 2. Hotkeys
 Hotkeys are defined in the settings and can be customized. The default hotkeys include:
@@ -31,16 +34,16 @@ Hotkeys are defined in the settings and can be customized. The default hotkeys i
 ### 3. Password Management
 Passwords are stored in a CSV file. The program reads this file to populate the list view. Users can:
 - **Search**: Enter keywords, application names, or OCR-extracted text to find accounts.
-- **Add**: Add a new account using a dedicated GUI with recommendations for usernames and passwords.
-- **Modify**: Edit an existing account directly from the list view or context menu.
+- **Add**: Add a new account with recommendations for usernames and passwords that can be configured in the settings gui.
+- **Modify**: Edit an existing account directly from the list view (`F2`) or context menu.
 - **Delete**: Remove an account after confirmation.
 
 ### 4. OCR Lens
 The OCR lens allows users to extract text from the screen. The lens dimensions and appearance can be adjusted dynamically using arrow keys:
 - **Arrow Keys**: Resize the lens (width and height).
-- **Esc**: Exit the lens mode without selecting text.
-- **Left Mouse Button**: Confirm the selection and extract text.
-- **Dynamic Border Color**: Adjust the lens border color dynamically using RGB sliders in the settings GUI.
+- **Esc**: Exit the lens mode without selecting text, cancelling the account finding operation.
+- **Left Mouse Button**: Confirm the selection and extract text, then try to find the corresponding account.
+- **Dynamic Border Color and Thickness**: Adjust the lens border thickness and color dynamically using RGB sliders in the settings GUI.
 
 The extracted text can be used to search for accounts or perform other actions.
 
@@ -48,7 +51,7 @@ The extracted text can be used to search for accounts or perform other actions.
 The settings GUI provides a tabbed interface to modify configurations:
 - **Hotkeys**: Customize shortcuts for various actions.
 - **Recommendations**: Manage recommended usernames and passwords.
-- **Files and Sync**: Set the password CSV file path and sync directory.
+- **Settings**: Configure file paths, enable/disable relevance display, toggle "Run on System Startup," and "Show on Launch."
 - **Lens**: Adjust lens dimensions, border color, and other properties dynamically.
 
 ### 6. Synchronization
@@ -85,9 +88,9 @@ or
 
 ### CSV Format
 The `passwords.csv` file should follow this format:
-| App/Website Name | URL             | Username       | Password       | Note (Optional)|
-|------------------|-----------------|----------------|----------------|----------------|
-| Example_App      | https://app.com | example_user   | example_pass   | Optional note  |
+| App/Website Name | URL             | Username       | Password       | Note (Optional) |
+|------------------|-----------------|----------------|----------------|-----------------|
+| Example_App      | https://app.com | example_user   | example_pass   | Optional note   |
 
 The file should look like this:
 ```
@@ -96,14 +99,15 @@ Example_App1,https://app1.com,example_user1,example_pass1,This is a note
 Example_App2,https://app2.com,example_user2,example_pass2,Another note
 Example_App3,https://app3.com,example_user3,example_pass3,
 ```
-- the columns can be rearranged, which wil be reflected in the list view columns order
-- the note column is entirely optional and can be removed from the file
+- The columns can be rearranged, which will be reflected in the list view columns order.
+- The "note" column is entirely optional and can be removed from the file.
 
 ## Notes
 
 - Ensure the `passwords.csv` file exists and is properly formatted.
 - The program automatically saves changes to the configuration file and synchronizes the password file if a sync directory is specified.
 - Lens dimensions and border colors are saved automatically if the "Save lens dimensions" option is enabled in the settings.
+- If "Run on System Startup" is enabled, a shortcut is created in the system's startup folder. The shortcut is deleted if disabled.
 
 ## License
 
