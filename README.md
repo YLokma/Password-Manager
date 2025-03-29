@@ -34,9 +34,9 @@ Hotkeys are defined in the settings and can be customized. The default hotkeys i
 ### 3. Password Management
 Passwords are stored in a CSV file. The program reads this file to populate the list view. Users can:
 - **Search**: Enter keywords, application names, or OCR-extracted text to find accounts.
-- **Add**: Add a new account with recommendations for usernames and passwords that can be configured in the settings gui.
-- **Modify**: Edit an existing account directly from the list view (`F2`) or context menu.
-- **Delete**: Remove an account after confirmation.
+- **Add** (`F1`): Add a new account with recommendations for usernames and passwords that can be configured in the settings gui.
+- **Modify** (`F2`): Edit an existing account directly from the list view or context menu.
+- **Delete** (`F3`): Remove an account after confirmation.
 
 ### 4. OCR Lens
 The OCR lens allows users to extract text from the screen. The lens dimensions and appearance can be adjusted dynamically using arrow keys:
@@ -101,6 +101,7 @@ Example_App3,https://app3.com,example_user3,example_pass3,
 ```
 - The columns can be rearranged, which will be reflected in the list view columns order.
 - The "note" column is entirely optional and can be removed from the file.
+- Every column name is case-sensitive and must follow the standard format shown above
 
 ## Notes
 

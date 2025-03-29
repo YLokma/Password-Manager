@@ -228,7 +228,7 @@ open_settings(*) {
 
 	Tabs.UseTab('Hotkeys')
     for key, value in configuration['Hotkeys'] {
-        Settings_Gui.AddText("w300", format_key_name(key)).SetFont("underline bold")
+        Settings_Gui.AddText("w250", format_key_name(key)).SetFont("underline bold")
 		Settings_Gui.AddHotkey('wp v' key, value)
     }
 
@@ -286,7 +286,7 @@ open_settings(*) {
     }
 
     Tabs.UseTab(0)
-    submit_button := Settings_Gui.AddButton('w161 Default r2', "Save")
+    submit_button := Settings_Gui.AddButton('w136 Default r2', "Save")
     submit_button.OnEvent("Click", submit_configuration)
     submit_button.SetFont("bold s12")
     submit_button.Description := "Apply & Save the changes"
