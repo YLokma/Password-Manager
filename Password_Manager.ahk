@@ -69,7 +69,7 @@ A_TrayMenu.Add("Settings", open_settings)
 A_TrayMenu.Default := "Password Manager"
 A_TrayMenu.ClickCount := 1
 
-PM_GUI := Gui("-MaximizeBox -MinimizeBox", "Password Manager")
+PM_GUI := Gui("-MaximizeBox -MinimizeBox", "Password Manager") ; total width = 590
 PM_GUI.BackColor := 'White'
 PM_GUI.SetFont("s10", 'Consolas')
 PM_GUI.OnEvent("Escape", (*) => (ToolTip(), PM_GUI.Hide()))
@@ -81,10 +81,12 @@ HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
     Hotkey(configuration['Hotkeys']['4_password_key'], (*) => password ? SendText(password) : "")
 HotIfWinActive("ahk_id " PM_GUI.Hwnd)
     Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F")), PM_GUI.Hide()))
+    Hotkey('F1', (*) => account_gui())
     Hotkey('F2', (*) => account_gui(StrSplit(csv_format(List_View.GetNext(, "F")), ',', '`r`n')))
-    Hotkey('+Delete', delete_account)
+    Hotkey('F3', delete_account)
     Hotkey('Up', (*) => move_selector(-1))
     Hotkey('Down', (*) => move_selector(+1))
+    
     Hotkey('^a', (*) => Search_Box.Focus())
     Hotkey('^BackSpace', delete_word)
 HotIf
@@ -144,9 +146,17 @@ if (counter != default_columns.Length) {
 }
 
 List_View := PM_GUI.AddListView("xm w580 h250 c555555 +Grid -Multi -Hdr -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
-List_View.OnEvent("ContextMenu", (CtrlObj, Item, *) => show_context_menu(Item))
+List_View.OnEvent("ContextMenu", (lv_obj, row_number, *) => (Search_Box.Focus(), show_context_menu(row_number)))
 List_View.OnEvent("DoubleClick", double_click_account)
 List_View.OnEvent("Click", (*) => (Search_Box.Focus(), Send("{End}")))
+
+Status_Bar := PM_GUI.AddStatusBar()
+Status_Bar.SetParts(100, 150, 135, 60, 80, 85)
+Status_Bar.SetText("Enter: copy account", 2)
+Status_Bar.SetText("Up/Down: navigate", 3)
+Status_Bar.SetText("F1: Add", 4)
+Status_Bar.SetText("F2: Modify", 5)
+Status_Bar.SetText("F3: Delete", 6)
 
 search()
 for column in list_columns {
@@ -417,9 +427,6 @@ double_click_account(list, row) {
     copy_account(row)
     PM_GUI.Hide()
 }
-
-; -----------------------------------------------------------------------
-
 search(query := Search_Box.Text) {
     List_View.Delete()
     List_View.Opt("-Redraw")
@@ -463,7 +470,7 @@ search(query := Search_Box.Text) {
     List_View.Modify(1, "Focus Select")
     List_View.Opt("+Redraw")
 
-    PM_GUI.Title := "Password Manager - " List_View.GetCount() " results"
+    Status_Bar.SetText(" " List_View.GetCount() " results")
 
     return List_View.GetCount()
 }
