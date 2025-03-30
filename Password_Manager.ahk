@@ -35,7 +35,7 @@ if FileExist(config_file) {
         "Lens", Map(
             "1_lens_width", "150",
             "2_lens_height", "50",
-            "3_lens_border_color", "Teal",
+            "3_lens_border_color", "0xFF0000",
             "4_lens_border_width", "2",
             "5_save_lens_dimensions?", "1"
         )
@@ -49,7 +49,7 @@ if not FileExist(configuration['Settings']['1_passwords_csv_file']) {
 if configuration['Settings']['5_run_on_system_startup?'] {
     FileCreateShortcut(A_ScriptFullPath, A_Startup '\' RegExReplace(A_ScriptName, "\..*$", ".lnk"), , , , A_IsCompiled ? A_ScriptFullPath : A_IconFile)
 } else {
-    FileDelete(A_Startup '\' RegExReplace(A_ScriptName, "\..*$", ".lnk"))
+    try FileDelete(A_Startup '\' RegExReplace(A_ScriptName, "\..*$", ".lnk"))
 }
 username := '`0'
 password := '`0'
@@ -142,7 +142,8 @@ for def_col in default_columns {
 }
 if (counter != default_columns.Length) {
     MsgBox("The CSV passwords file must contain the following columns:`n" '"name", "url", "username", "password", "note" (optional)', "Error: Invalid CSV file")
-    ExitApp()
+    FileDelete(config_file)
+    Reload()
 }
 
 List_View := PM_GUI.AddListView("xm w580 h250 c555555 +Grid -Multi -Hdr -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
