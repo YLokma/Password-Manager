@@ -204,7 +204,7 @@ lens(*) {
     if rows {
         if rows == 1
             found := 1
-        else if List_View.GetText(1, List_View.Length) > List_View.GetText(2, List_View.Length)
+        else if List_View.GetText(1, list_columns.Length) > List_View.GetText(2, list_columns.Length)
             found := 1
     }
     if found {
@@ -393,7 +393,6 @@ find_current_window(*) {
         
         if found {
             copy_account(1)
-            
             ToolTip(List_View.GetText(1, csv_column_locations["name"]))
             SetTimer((*) => ToolTip(), -2000)
         }
