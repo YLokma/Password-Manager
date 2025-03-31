@@ -1,8 +1,14 @@
 #SingleInstance Force
 config_file := "PM settings.ini"
 
-if (not A_IsCompiled)
+A_TrayMenu.Delete()
+if not A_IsCompiled {
     TraySetIcon("Key.ico",,1)
+    Standard_Menu := Menu()
+    Standard_Menu.AddStandard()
+    A_TrayMenu.Add("Standard", Standard_Menu)
+    A_TrayMenu.Add()
+}
 
 if FileExist(config_file) {
     configuration := Map()
@@ -50,23 +56,9 @@ if configuration['Settings']['4_run_on_system_startup?'] {
 } else {
     try FileDelete(A_Startup '\' RegExReplace(A_ScriptName, "\..*$", ".lnk"))
 }
+
 username := '`0'
 password := '`0'
-
-A_TrayMenu.Delete()
-
-Standard_Menu := Menu()
-Standard_Menu.AddStandard()
-
-A_TrayMenu.Add("Standard", Standard_Menu)
-A_TrayMenu.Add()
-A_TrayMenu.Add("Password Manager", (*) => (list_all_windows(), show()))
-A_TrayMenu.Add("Find this account", find_current_window)
-A_TrayMenu.Add("Lens", lens)
-; A_TrayMenu.Add("OCR", OCR_Under_Mouse)
-A_TrayMenu.Add("Settings", open_settings)
-A_TrayMenu.Default := "Password Manager"
-A_TrayMenu.ClickCount := 1
 
 PM_GUI := Gui("+Resize", "Password Manager")
 PM_GUI.BackColor := 'White'
@@ -74,32 +66,10 @@ PM_GUI.SetFont("s10", 'Consolas')
 PM_GUI.OnEvent("Escape", (*) => (ToolTip(), PM_GUI.Hide()))
 PM_GUI.OnEvent("Size", (GuiObj, MinMax, Width, Height) => MinMax == -1 ? "" : resize_window(Width, Height))
 
-HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
-    Hotkey(configuration['Hotkeys']['1_account_finder_key'], find_current_window)
-    Hotkey(configuration['Hotkeys']['2_lens_key'], lens)
-    Hotkey(configuration['Hotkeys']['3_username_key'], (*) => username ? SendText(username) : "")
-    Hotkey(configuration['Hotkeys']['4_password_key'], (*) => password ? SendText(password) : "")
-HotIfWinActive("ahk_id " PM_GUI.Hwnd)
-    Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F")), PM_GUI.Hide()))
-    Hotkey('F1', (*) => account_gui())
-    Hotkey('F2', (*) => account_gui(StrSplit(csv_format(List_View.GetNext(, "F")), ',', '`r`n')))
-    Hotkey('F3', delete_account)
-    Hotkey('Up', (*) => move_selector(-1))
-    Hotkey('Down', (*) => move_selector(+1))
-    
-    Hotkey('^a', (*) => Search_Box.Focus())
-    Hotkey('^BackSpace', delete_word)
-HotIf
-
 Search_Button := PM_GUI.AddButton("w25 h23 Default", '')
 Search_Button.OnEvent("Click", (*) => (PM_GUI.Hide(), WinActivate(StrSplit(list_all_windows()[1], " -> ")[2]), find_current_window()))
 Search_Button.Description := "Search for an account"
 GuiButtonIcon(Search_Button, "shell32.dll", 23, "A4")
-
-; Reset_Button := PM_GUI.AddButton("w25 h23 yp", '')
-; Reset_Button.OnEvent("Click", (*) => search())
-; Reset_Button.Description := "Reset current view"
-; GuiButtonIcon(Reset_Button, "shell32.dll", 239, "A4")
 
 Search_Box := PM_GUI.AddComboBox("yp vSearch_Box")
 Search_Box.Description := "Enter your search query"
@@ -134,36 +104,65 @@ for req_col in required_columns
             col_count++
 if (col_count != required_columns.Length) {
     MsgBox("The CSV passwords file must contain the following columns:`n" '"name", "url", "username", "password"', "Error: Invalid CSV file")
-    FileDelete(config_file)
+    IniWrite("# Please locate your passwords CSV file #", config_file, 'Settings', '1_passwords_csv_file')
     Reload()
 }
 
-list_columns := csv_columns.Clone()
-list_columns.Push("relevance")
+A_TrayMenu.Add("Password Manager", (*) => (list_all_windows(), show()))
+A_TrayMenu.Add("Find this account", find_current_window)
+A_TrayMenu.Add("Lens", lens)
+A_TrayMenu.Add("Settings", open_settings)
+A_TrayMenu.Default := "Password Manager"
+A_TrayMenu.ClickCount := 1
+
+HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
+    Hotkey(configuration['Hotkeys']['1_account_finder_key'], find_current_window)
+    Hotkey(configuration['Hotkeys']['2_lens_key'], lens)
+    Hotkey(configuration['Hotkeys']['3_username_key'], (*) => username ? SendText(username) : "")
+    Hotkey(configuration['Hotkeys']['4_password_key'], (*) => password ? SendText(password) : "")
+HotIfWinActive("ahk_id " PM_GUI.Hwnd)
+    Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F")), PM_GUI.Hide()))
+    Hotkey('F1', (*) => account_gui())
+    Hotkey('F2', (*) => modify_account(List_View.GetNext(, "F")))
+    Hotkey('F3', delete_account)
+    Hotkey('Up', (*) => move_selector(-1))
+    Hotkey('Down', (*) => move_selector(+1))
+    
+    Hotkey('^a', (*) => Search_Box.Focus())
+    Hotkey('^BackSpace', delete_word)
+HotIf
+
+list_columns := ["rank"]
+list_columns.Push(csv_columns*)
+list_column_locations := Map()
+for col in list_columns
+    list_column_locations[col] := A_Index
 
 column_widths := Map()
 column_widths['name'] := 0.3
 column_widths['username'] := 0.3
 column_widths['url'] := 0.2
+column_widths['note'] := 0.1
 column_widths['password'] := 0.05
-column_widths['note'] := 0.14
-column_widths['relevance'] := 0.01
+column_widths['rank'] := 0.05
 
 rows_count := -1 ; to skip the header row
 loop read configuration['Settings']['1_passwords_csv_file']
     rows_count++
 
 image_list := IL_Create(5)
-IL_Add(image_list, "shell32.dll", 161) ; username
-IL_Add(image_list, "shell32.dll", 105) ; password
-IL_Add(image_list, "shell32.dll", 209) ; name
-IL_Add(image_list, "shell32.dll", 14)  ; url
-IL_Add(image_list, "shell32.dll", 294) ; relevance
+icons := Map(
+    "rank", IL_Add(image_list, "shell32.dll", 209),
+    "username", IL_Add(image_list, "shell32.dll", 112),
+    "password", IL_Add(image_list, "shell32.dll", 105),
+    "name", IL_Add(image_list, "shell32.dll", 209),
+    "url", IL_Add(image_list, "shell32.dll", 14),
+    "note", IL_Add(image_list, "shell32.dll", 211)
+)
 
 List_View := PM_GUI.AddListView("xm w600 h250 c555555 Count" rows_count " +Grid -Multi -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
-List_View.OnEvent("ContextMenu", (lv_obj, row_number, *) => (Search_Box.Focus(), show_context_menu(row_number)))
+List_View.OnEvent("ContextMenu", (lv_obj, row_number, *) => (show_context_menu(row_number)))
 List_View.OnEvent("DoubleClick", double_click_account)
-List_View.OnEvent("Click", (*) => (Search_Box.Focus(), Send("{End}")))
 List_View.SetImageList(image_list, 1)
 
 Status_Bar := PM_GUI.AddStatusBar()
@@ -175,11 +174,10 @@ Status_Bar.SetText("F2: Modify", 5)
 Status_Bar.SetText("F3: Delete", 6)
 
 search()
-List_View.ModifyCol(csv_column_locations["username"], "Icon1")
-List_View.ModifyCol(csv_column_locations["password"], "Icon2")
-List_View.ModifyCol(csv_column_locations["name"], "Sort Icon3")
-List_View.ModifyCol(csv_column_locations["url"], "Icon4")
-List_View.ModifyCol(list_columns.Length, "Icon5")
+for col, loc in list_column_locations
+    List_View.ModifyCol(loc, "Icon" icons[col])
+
+List_View.ModifyCol(list_column_locations['name'], "Sort")
 
 if (configuration['Settings']['3_show_on_launch?'])
     show()
@@ -216,12 +214,12 @@ lens(*) {
     if rows {
         if rows == 1
             found := 1
-        else if List_View.GetText(1, list_columns.Length) > List_View.GetText(2, list_columns.Length)
+        else if List_View.GetText(1, list_column_locations['rank']) > List_View.GetText(2, list_column_locations['rank'])
             found := 1
     }
     if found {
         copy_account(1)
-        ToolTip(List_View.GetText(1, csv_column_locations["name"]))
+        ToolTip(List_View.GetText(1, list_column_locations["name"]))
         SetTimer((*) => ToolTip(), -2000)
     } else
         show()
@@ -403,12 +401,12 @@ find_current_window(*) {
     if rows {
         if rows == 1
             found := 1
-        else if List_View.GetText(1, list_columns.Length) > List_View.GetText(2, list_columns.Length)
+        else if List_View.GetText(1, list_column_locations['rank']) > List_View.GetText(2, list_column_locations['rank'])
             found := 1
         
         if found {
             copy_account(1)
-            ToolTip(List_View.GetText(1, csv_column_locations["name"]))
+            ToolTip(List_View.GetText(1, list_column_locations["name"]))
             SetTimer((*) => ToolTip(), -2000)
         }
         else
@@ -417,6 +415,9 @@ find_current_window(*) {
         lens()
 }
 show(*) {
+    if not IsSet(List_View)
+        return
+
     List_View.Opt("-Redraw")
     PM_GUI.Show()
     List_View.Opt("+Redraw")
@@ -458,31 +459,38 @@ search(query := Search_Box.Text) {
         app_name := "`0"
     
     keywords := StrSplit(query, delimiters)
-        
-    loop read configuration['Settings']['1_passwords_csv_file'] {
-        if A_Index = 1
-            continue ; skip column headers
 
-        current := []
-        loop parse A_LoopReadLine, "CSV"
-            current.Push(A_LoopField)
+    try {
+        loop read configuration['Settings']['1_passwords_csv_file'] {
+            if A_Index = 1
+                continue ; skip column headers
 
-        relevance := (keywords.Length = 0)
-        
-        for word in StrSplit(current[csv_column_locations["name"]], delimiters)
-            relevance += (3 * (app_name = word))
-        
-        for keyword in keywords
-            for word in StrSplit(current[csv_column_locations["name"]], delimiters)
-                if StrLen(keyword) > 0
-                    relevance += (Max(InStr(word, keyword) > 0, 2 * (word = keyword))) ; * 2) + (InStr(current[3], word) > 0))
-        current.Push(relevance)
-        if relevance
-            List_View.Add("Icon-1", current*)
+            csv_row := []
+            loop parse A_LoopReadLine, "CSV"
+                csv_row.Push(A_LoopField)
+
+            rank := (keywords.Length = 0)
+            
+            for word in StrSplit(csv_row[csv_column_locations["name"]], delimiters)
+                rank += (3 * (app_name = word))
+            
+            for keyword in keywords
+                for word in StrSplit(csv_row[csv_column_locations["name"]], delimiters)
+                    if StrLen(keyword) > 0
+                        rank += (Max(InStr(word, keyword) > 0, 2 * (word = keyword)))
+
+            list_row := []
+            list_row.Push(rank, csv_row*)
+            if rank
+                List_View.Add("Icon-1", list_row*)
+        }
+    } catch Error {
+        IniWrite("# Please locate your passwords CSV file #", config_file, 'Settings', '1_passwords_csv_file')
+        Reload()    
     }
 
     if keywords.Length > 0
-        List_View.ModifyCol(list_columns.Length, "Integer SortDesc")
+        List_View.ModifyCol(list_column_locations['rank'], "Integer SortDesc")
     
     List_View.Modify(1, "Focus Select")
     List_View.Opt("+Redraw")
@@ -506,8 +514,8 @@ move_selector(displacement) {
 copy_account(row) {
     global username, password
     
-    username := List_View.GetText(row, csv_column_locations["username"])
-    password := List_View.GetText(row, csv_column_locations["password"])
+    username := List_View.GetText(row, list_column_locations["username"])
+    password := List_View.GetText(row, list_column_locations["password"])
 
     SetTimer(clear_variable, -1000 * 60 * 5)
     clear_variable(*) {
@@ -515,23 +523,23 @@ copy_account(row) {
         password := '`0'
     }
 }
-
+modify_account(row) {
+    arr := []
+    for col in list_columns
+        arr.Push(List_View.GetText(row, A_Index))
+    account_gui(arr)
+}
 show_context_menu(row) {
     context_menu := Menu()
     context_menu.Add("Go to website", run_website)
-    context_menu.Add("Modify", modify_account)
+    context_menu.Add("Modify", (*) => modify_account(List_View.GetNext(, "F")))
     context_menu.Add("Delete", delete_account)
     context_menu.Show()
     
-    modify_account(ItemName, ItemPos, MyMenu) {
-        found_account_text := csv_format(List_View.GetNext(, 'F'))
-        found_account_array := StrSplit(found_account_text, ',', '`r`n')
-        account_gui(found_account_array)
-    }
     run_website(ItemName, ItemPos, MyMenu) {
         row := List_View.GetNext(, "F")
-        url := List_View.GetText(row, csv_column_locations["url"])
-        name := List_View.GetText(row, csv_column_locations["name"])
+        url := List_View.GetText(row, list_column_locations["url"])
+        name := List_View.GetText(row, list_column_locations["name"])
         if (SubStr(url, 1, 4) == "http")
             Run url
         else if MsgBox("URL not found, do you want to search for it?", "Invalid URL", "Y/N") == "Yes"
@@ -547,7 +555,7 @@ account_gui(found_account_array := 0) {
     
     for column in csv_columns {
         if (found_account_array)
-            Recommendations[column] := [found_account_array[A_Index]]
+            Recommendations[column] := [found_account_array[list_column_locations[column]]]
         else
             Recommendations[column] := []
     }
@@ -567,17 +575,17 @@ account_gui(found_account_array := 0) {
     New_Account_GUI.Show()
     return New_Account_GUI
     
-    create(GuiCtrlObj, Info) {
-        submitted_account := GuiCtrlObj.Gui.Submit()
+    create(*) {
+        submitted_account := New_Account_GUI.Submit()
         
         replace_text_in_file(, csv_format(submitted_account))
         Search_Box.Text := submitted_account.name
         search()
         sync_file()
     }
-    modify(GuiCtrlObj, Info) {
-        submitted_account := GuiCtrlObj.Gui.Submit()
-    
+    modify(*) {
+        submitted_account := New_Account_GUI.Submit()
+        
         replace_text_in_file(csv_format(List_View.GetNext(, 'F')), csv_format(submitted_account))
         Search_Box.Text := submitted_account.name
         search()
@@ -589,13 +597,13 @@ csv_format(source) {
     
     for column in csv_columns {
         if IsNumber(source) {
-            formatted_text .= List_View.GetText(source, A_Index)
+            formatted_text .= List_View.GetText(source, list_column_locations[column])
         }
         else if IsObject(source)
             formatted_text .= source.%column%
         else
             return
-                
+        
         if (A_Index < csv_columns.Length)
             formatted_text .= ','
     }
@@ -603,7 +611,13 @@ csv_format(source) {
     return formatted_text
 }
 replace_text_in_file(old_text?, new_text?, Filename := configuration['Settings']['1_passwords_csv_file']) {
-    File_Text := FileRead(Filename)
+    try {
+        File_Text := FileRead(Filename)
+    } catch Error {
+        IniWrite("# Please locate your passwords CSV file #", config_file, 'Settings', '1_passwords_csv_file')
+        Reload()    
+    }
+    
     if IsSet(old_text)
         New_File_Text := StrReplace(File_Text, old_text, new_text, true,, 1)
     else
@@ -614,7 +628,7 @@ replace_text_in_file(old_text?, new_text?, Filename := configuration['Settings']
     FileObj.Close()
 }
 delete_account(*) {
-    if (MsgBox("Are you sure you want to delete this account?",,"Y/N Default2")) = "No"
+    if (MsgBox("Are you sure you want to delete this account?",,"Y/N Default2")) == "No"
         return
 
     replace_text_in_file(csv_format(List_View.GetNext(, 'F')), "")
@@ -724,26 +738,4 @@ OCR_Under_Mouse(*) {
 			guis[i].Show("NA x" . x1 . " y" . y1 . " w" . w1 . " h" . h1)
 		}
 	}
-    ; box := Gui("+AlwaysOnTop -SysMenu ToolWindow -DPIScale", 'Lens')
-    ; box.BackColor := configuration['Lens']['3_lens_border_color']
-    ; WinSetTransparent(100, box.Hwnd)
-    
-    ; while not (done or esc) {
-    ;     MouseGetPos(&x, &y)
-    ;     ; box.Title := OCR.FromRect(x-w, y-h, w, h, {scale:2}).Text
-    ;     ; box.Show("NA x" . x-w-5 . " y" . y-h-40 . " w" . w . " h" . h)
-	; }
-    ; found_text := box.Title
-    ; box.Destroy()
 }
-
-/* columns := Map("CSV", Map("Website Name", 1, "URL", 2, "username/email", 3, "password", 4),
-"list", Map("relevance", 1, "Website Name", 2,  "username/email", 3, "password", 4, "URL", 5))
-
-new_columns := Map(
-    "#", Map("CSV", 0, "List", 1),
-    "Website Name", Map("CSV", 1, "List", 2),
-    "username/email", Map("CSV", 3, "List", 3),
-    "password", Map("CSV", 4, "List", 4),
-    "URL", Map("CSV", 2, "List", 5)
-) */
