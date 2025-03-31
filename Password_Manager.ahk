@@ -28,9 +28,8 @@ if FileExist(config_file) {
 		"Settings", Map(
 			"1_passwords_csv_file", "# Please locate your passwords CSV file #",
 			"2_sync_directory", "# directory to sync your passwords file #",
-            "3_show_relevance?", "0",
-            "4_show_on_launch?", "1",
-            "5_run_on_system_startup?", "0"
+            "3_show_on_launch?", "1",
+            "4_run_on_system_startup?", "0"
 		),
         "Lens", Map(
             "1_lens_width", "150",
@@ -46,7 +45,7 @@ if not FileExist(configuration['Settings']['1_passwords_csv_file']) {
     open_settings()
 }
 
-if configuration['Settings']['5_run_on_system_startup?'] {
+if configuration['Settings']['4_run_on_system_startup?'] {
     FileCreateShortcut(A_ScriptFullPath, A_Startup '\' RegExReplace(A_ScriptName, "\..*$", ".lnk"), , , , A_IsCompiled ? A_ScriptFullPath : A_IconFile)
 } else {
     try FileDelete(A_Startup '\' RegExReplace(A_ScriptName, "\..*$", ".lnk"))
@@ -119,7 +118,6 @@ GuiButtonIcon(Settings_Button, "shell32.dll", 315, "A4")
 while not FileExist(configuration['Settings']['1_passwords_csv_file'])
     Sleep(50)
 
-default_columns := ["name", "url", "username", "password", "note"]
 csv_columns := [], csv_column_locations := Map()
 loop read configuration['Settings']['1_passwords_csv_file'] {
     loop parse A_LoopReadLine, "CSV" {
@@ -129,19 +127,13 @@ loop read configuration['Settings']['1_passwords_csv_file'] {
     break
 }
 
-counter := 0
-for def_col in default_columns {
-    if def_col = "note" {
-        counter++
-        continue
-    }
-
+col_count := 0, required_columns := ["name", "url", "username", "password"]
+for req_col in required_columns
     for col in csv_columns
-        if (def_col = col)
-            counter++
-}
-if (counter != default_columns.Length) {
-    MsgBox("The CSV passwords file must contain the following columns:`n" '"name", "url", "username", "password", "note" (optional)', "Error: Invalid CSV file")
+        if (req_col = col)
+            col_count++
+if (col_count != required_columns.Length) {
+    MsgBox("The CSV passwords file must contain the following columns:`n" '"name", "url", "username", "password"', "Error: Invalid CSV file")
     FileDelete(config_file)
     Reload()
 }
@@ -154,20 +146,25 @@ column_widths['name'] := 0.3
 column_widths['username'] := 0.3
 column_widths['url'] := 0.2
 column_widths['password'] := 0.05
+column_widths['note'] := 0.14
+column_widths['relevance'] := 0.01
 
-if configuration['Settings']['3_show_relevance?'] {
-    column_widths['note'] := 0.10
-    column_widths['relevance'] := 0.05
-}
-else {
-    column_widths['note'] := 0.14
-    column_widths['relevance'] := 0.01
-}
+rows_count := -1 ; to skip the header row
+loop read configuration['Settings']['1_passwords_csv_file']
+    rows_count++
 
-List_View := PM_GUI.AddListView("xm w600 h250 c555555 +Grid -Multi -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
+image_list := IL_Create(5)
+IL_Add(image_list, "shell32.dll", 161) ; username
+IL_Add(image_list, "shell32.dll", 105) ; password
+IL_Add(image_list, "shell32.dll", 209) ; name
+IL_Add(image_list, "shell32.dll", 14)  ; url
+IL_Add(image_list, "shell32.dll", 294) ; relevance
+
+List_View := PM_GUI.AddListView("xm w600 h250 c555555 Count" rows_count " +Grid -Multi -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
 List_View.OnEvent("ContextMenu", (lv_obj, row_number, *) => (Search_Box.Focus(), show_context_menu(row_number)))
 List_View.OnEvent("DoubleClick", double_click_account)
 List_View.OnEvent("Click", (*) => (Search_Box.Focus(), Send("{End}")))
+List_View.SetImageList(image_list, 1)
 
 Status_Bar := PM_GUI.AddStatusBar()
 Status_Bar.SetParts(100, 150, 135, 60, 80, 85)
@@ -178,9 +175,13 @@ Status_Bar.SetText("F2: Modify", 5)
 Status_Bar.SetText("F3: Delete", 6)
 
 search()
-List_View.ModifyCol(csv_column_locations["name"], "Sort")
+List_View.ModifyCol(csv_column_locations["username"], "Icon1")
+List_View.ModifyCol(csv_column_locations["password"], "Icon2")
+List_View.ModifyCol(csv_column_locations["name"], "Sort Icon3")
+List_View.ModifyCol(csv_column_locations["url"], "Icon4")
+List_View.ModifyCol(list_columns.Length, "Icon5")
 
-if (configuration['Settings']['4_show_on_launch?'])
+if (configuration['Settings']['3_show_on_launch?'])
     show()
 
 ; =============================================================================
@@ -192,9 +193,9 @@ resize_window(w, h) {
     Add_Button.Move(w - 70)
     Settings_Button.Move(w - 40)
 
-    List_View.Move(,, w - 25, h - 69)
+    List_View.Move(,, w - 25, h - 70)
     for column in list_columns
-        List_View.ModifyCol(A_Index, Floor(column_widths[column] * (w - 40)) - 1)
+        List_View.ModifyCol(A_Index, Floor(column_widths[column] * (w - 50)))
 }
 delete_word(*) {
     if not Search_Box.Focused
@@ -416,7 +417,9 @@ find_current_window(*) {
         lens()
 }
 show(*) {
+    List_View.Opt("-Redraw")
     PM_GUI.Show()
+    List_View.Opt("+Redraw")
     Search_Box.Focus()
     
     SetTimer(show_descriptions, 250)
@@ -475,7 +478,7 @@ search(query := Search_Box.Text) {
                     relevance += (Max(InStr(word, keyword) > 0, 2 * (word = keyword))) ; * 2) + (InStr(current[3], word) > 0))
         current.Push(relevance)
         if relevance
-            List_View.Add(, current*)
+            List_View.Add("Icon-1", current*)
     }
 
     if keywords.Length > 0
