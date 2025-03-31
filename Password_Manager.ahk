@@ -69,10 +69,11 @@ A_TrayMenu.Add("Settings", open_settings)
 A_TrayMenu.Default := "Password Manager"
 A_TrayMenu.ClickCount := 1
 
-PM_GUI := Gui("-MaximizeBox -MinimizeBox", "Password Manager") ; total width = 590
+PM_GUI := Gui("+Resize", "Password Manager")
 PM_GUI.BackColor := 'White'
 PM_GUI.SetFont("s10", 'Consolas')
 PM_GUI.OnEvent("Escape", (*) => (ToolTip(), PM_GUI.Hide()))
+PM_GUI.OnEvent("Size", (GuiObj, MinMax, Width, Height) => MinMax == -1 ? "" : resize_window(Width, Height))
 
 HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
     Hotkey(configuration['Hotkeys']['1_account_finder_key'], find_current_window)
@@ -101,7 +102,7 @@ GuiButtonIcon(Search_Button, "shell32.dll", 23, "A4")
 ; Reset_Button.Description := "Reset current view"
 ; GuiButtonIcon(Reset_Button, "shell32.dll", 239, "A4")
 
-Search_Box := PM_GUI.AddComboBox("w485 yp vSearch_Box")
+Search_Box := PM_GUI.AddComboBox("yp vSearch_Box")
 Search_Box.Description := "Enter your search query"
 Search_Box.OnEvent("Change", (*) => search())
 
@@ -109,6 +110,7 @@ Add_Button := PM_GUI.AddButton("w25 h23 yp", '')
 Add_Button.OnEvent("Click", (*) => account_gui())
 Add_Button.Description := "Add a new account"
 GuiButtonIcon(Add_Button, "shell32.dll", 270, "A4")
+
 Settings_Button := PM_GUI.AddButton("w25 h23 yp", '')
 Settings_Button.OnEvent("Click", open_settings)
 Settings_Button.Description := "Open settings"
@@ -118,16 +120,14 @@ while not FileExist(configuration['Settings']['1_passwords_csv_file'])
     Sleep(50)
 
 default_columns := ["name", "url", "username", "password", "note"]
-csv_columns := [], list_columns := [], csv_column_locations := Map()
+csv_columns := [], csv_column_locations := Map()
 loop read configuration['Settings']['1_passwords_csv_file'] {
     loop parse A_LoopReadLine, "CSV" {
         csv_columns.Push(A_LoopField)
-        list_columns.Push(A_LoopField)
         csv_column_locations[A_LoopField] := A_Index
     }
     break
 }
-list_columns.Push("relevance")
 
 counter := 0
 for def_col in default_columns {
@@ -146,7 +146,25 @@ if (counter != default_columns.Length) {
     Reload()
 }
 
-List_View := PM_GUI.AddListView("xm w580 h250 c555555 +Grid -Multi -Hdr -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
+list_columns := csv_columns.Clone()
+list_columns.Push("relevance")
+
+column_widths := Map()
+column_widths['name'] := 0.3
+column_widths['username'] := 0.3
+column_widths['url'] := 0.2
+column_widths['password'] := 0.05
+
+if configuration['Settings']['3_show_relevance?'] {
+    column_widths['note'] := 0.10
+    column_widths['relevance'] := 0.05
+}
+else {
+    column_widths['note'] := 0.14
+    column_widths['relevance'] := 0.01
+}
+
+List_View := PM_GUI.AddListView("xm w600 h250 c555555 +Grid -Multi -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
 List_View.OnEvent("ContextMenu", (lv_obj, row_number, *) => (Search_Box.Focus(), show_context_menu(row_number)))
 List_View.OnEvent("DoubleClick", double_click_account)
 List_View.OnEvent("Click", (*) => (Search_Box.Focus(), Send("{End}")))
@@ -160,23 +178,7 @@ Status_Bar.SetText("F2: Modify", 5)
 Status_Bar.SetText("F3: Delete", 6)
 
 search()
-for column in list_columns {
-    switch column {
-        case "name":
-            width := 200
-        case "url":
-            width := 100
-        case "username":
-            width := 200
-        case "password":
-            width := 13
-        case "note":
-            width := (configuration['Settings']['3_show_relevance?'] ? 25 : 45)
-        case "relevance":
-            width := (configuration['Settings']['3_show_relevance?'] ? 25 : 5)
-        }
-    List_View.ModifyCol(A_Index, width . (column = "name" ? " Sort" : ""))
-}
+List_View.ModifyCol(csv_column_locations["name"], "Sort")
 
 if (configuration['Settings']['4_show_on_launch?'])
     show()
@@ -185,6 +187,15 @@ if (configuration['Settings']['4_show_on_launch?'])
 ; --------------------------------- FUNCTIONS ---------------------------------
 ; =============================================================================
 
+resize_window(w, h) {
+    Search_Box.Move(,, w - 120)
+    Add_Button.Move(w - 70)
+    Settings_Button.Move(w - 40)
+
+    List_View.Move(,, w - 25, h - 69)
+    for column in list_columns
+        List_View.ModifyCol(A_Index, Floor(column_widths[column] * (w - 40)) - 1)
+}
 delete_word(*) {
     if not Search_Box.Focused
         Search_Box.Focus()
@@ -358,12 +369,15 @@ list_all_windows(*) {
             if (app_name != "explorer.exe" and app_name != "AutoHotkey64.exe")
                 titles.Push(app_name ' -> ' title)
     }
+    if not titles.Has(1)
+        return
+    
     if (InStr(titles[1], "Arc.exe -> ")) {
         WinActivate('ahk_exe Arc.exe')
         WinwaitActive('ahk_exe Arc.exe')
 
         A_Clipboard := ""
-        loop 4 {
+        loop 2 {
             Send '^+c'
             if ClipWait(0.5)
                 break
@@ -382,7 +396,7 @@ list_all_windows(*) {
 }
 find_current_window(*) {
     list_all_windows()
-    Search_Box.Choose(1)
+    try Search_Box.Choose(1)
     
     rows := search(), found := 0
     if rows {
@@ -402,7 +416,7 @@ find_current_window(*) {
         lens()
 }
 show(*) {
-    PM_GUI.Show('AutoSize Center')
+    PM_GUI.Show()
     Search_Box.Focus()
     
     SetTimer(show_descriptions, 250)
