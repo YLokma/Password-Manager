@@ -1,9 +1,9 @@
 #SingleInstance Force
 config_file := "PM settings.ini"
 
+TraySetIcon("imageres.dll", 78, 1)
 A_TrayMenu.Delete()
 if not A_IsCompiled {
-    TraySetIcon("Key.ico",,1)
     Standard_Menu := Menu()
     Standard_Menu.AddStandard()
     A_TrayMenu.Add("Standard", Standard_Menu)
@@ -69,7 +69,7 @@ PM_GUI.OnEvent("Size", (GuiObj, MinMax, Width, Height) => MinMax == -1 ? "" : re
 Search_Button := PM_GUI.AddButton("w25 h23 Default", '')
 Search_Button.OnEvent("Click", (*) => (PM_GUI.Hide(), WinActivate(StrSplit(list_all_windows()[1], " -> ")[2]), find_current_window()))
 Search_Button.Description := "Search for an account"
-GuiButtonIcon(Search_Button, "shell32.dll", 23, "A4")
+GuiButtonIcon(Search_Button, "imageres.dll", 169, "A4")
 
 Search_Box := PM_GUI.AddComboBox("yp vSearch_Box")
 Search_Box.Description := "Enter your search query"
@@ -78,12 +78,12 @@ Search_Box.OnEvent("Change", (*) => search())
 Add_Button := PM_GUI.AddButton("w25 h23 yp", '')
 Add_Button.OnEvent("Click", (*) => account_gui())
 Add_Button.Description := "Add a new account"
-GuiButtonIcon(Add_Button, "shell32.dll", 270, "A4")
+GuiButtonIcon(Add_Button, "imageres.dll", 248, "A4")
 
 Settings_Button := PM_GUI.AddButton("w25 h23 yp", '')
 Settings_Button.OnEvent("Click", open_settings)
 Settings_Button.Description := "Open settings"
-GuiButtonIcon(Settings_Button, "shell32.dll", 315, "A4")
+GuiButtonIcon(Settings_Button, "imageres.dll", 110, "A4")
 
 while not FileExist(configuration['Settings']['1_passwords_csv_file'])
     Sleep(50)
@@ -138,27 +138,24 @@ list_column_locations := Map()
 for col in list_columns
     list_column_locations[col] := A_Index
 
-column_widths := Map()
-column_widths['name'] := 0.3
-column_widths['username'] := 0.3
-column_widths['url'] := 0.2
-column_widths['note'] := 0.1
-column_widths['password'] := 0.05
-column_widths['rank'] := 0.05
+column_widths := Map(
+    'name', 0.3, 'username', 0.25, 'url', 0.2, 'password', 0.05, 'rank', 0.02
+)
+column_widths.Default := 0.18 / (csv_columns.Length - required_columns.Length)
+
+image_list := IL_Create(5)
+icons := Map(
+    "rank", IL_Add(image_list, "imageres.dll", 205),
+    "username", IL_Add(image_list, "imageres.dll", 125),
+    "password", IL_Add(image_list, "imageres.dll", 301),
+    "name", IL_Add(image_list, "imageres.dll", 226),
+    "url", IL_Add(image_list, "imageres.dll", 171)
+)
+icons.Default := IL_Add(image_list, "imageres.dll", 95)
 
 rows_count := -1 ; to skip the header row
 loop read configuration['Settings']['1_passwords_csv_file']
     rows_count++
-
-image_list := IL_Create(5)
-icons := Map(
-    "rank", IL_Add(image_list, "shell32.dll", 209),
-    "username", IL_Add(image_list, "shell32.dll", 112),
-    "password", IL_Add(image_list, "shell32.dll", 105),
-    "name", IL_Add(image_list, "shell32.dll", 209),
-    "url", IL_Add(image_list, "shell32.dll", 14),
-    "note", IL_Add(image_list, "shell32.dll", 211)
-)
 
 List_View := PM_GUI.AddListView("xm w600 h250 c555555 Count" rows_count " +Grid -Multi -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
 List_View.OnEvent("ContextMenu", (lv_obj, row_number, *) => (show_context_menu(row_number)))
@@ -261,7 +258,7 @@ open_settings(*) {
             browse_button := Settings_Gui.AddButton("wp vbrowse_" key, "Browse")
             browse_button.OnEvent("Click", browse)
             browse_button.Description := "Choose the file or folder"
-            GuiButtonIcon(browse_button, "shell32.dll", 46, "s20 R80 A4")
+            GuiButtonIcon(browse_button, "imageres.dll", 206, "s20 R80 A4")
         }
     }
 
@@ -301,13 +298,13 @@ open_settings(*) {
     submit_button.OnEvent("Click", submit_configuration)
     submit_button.SetFont("bold s12")
     submit_button.Description := "Apply & Save the changes"
-    GuiButtonIcon(submit_button, "shell32.dll", 259, "s22 R90 A4")
+    GuiButtonIcon(submit_button, "imageres.dll", 24, "s22 R90 A4")
     
     revert_button := Settings_Gui.AddButton('wp yp r2', "Revert")
     revert_button.OnEvent("Click", (*) => (Settings_Gui.Destroy(), open_settings()))
     revert_button.SetFont("bold s12")
     revert_button.Description := "Revert all changes"
-    GuiButtonIcon(revert_button, "shell32.dll", 296, "s22 R120 A4")
+    GuiButtonIcon(revert_button, "imageres.dll", 230, "s22 R120 A4")
 
     Settings_Gui.Show()
     Settings_Gui.OnEvent("Escape", (*) => Settings_Gui.Hide())
