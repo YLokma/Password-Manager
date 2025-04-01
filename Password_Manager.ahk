@@ -3,12 +3,6 @@ config_file := "PM settings.ini"
 
 TraySetIcon("imageres.dll", 78, 1)
 A_TrayMenu.Delete()
-if not A_IsCompiled {
-    Standard_Menu := Menu()
-    Standard_Menu.AddStandard()
-    A_TrayMenu.Add("Standard", Standard_Menu)
-    A_TrayMenu.Add()
-}
 
 if FileExist(config_file) {
     configuration := Map()
@@ -32,7 +26,7 @@ if FileExist(config_file) {
 			"2_recommended_passwords", ""
 		),
 		"Settings", Map(
-			"1_passwords_csv_file", "# Please locate your passwords CSV file #",
+			"1_passwords_csv_file", "Locate your passwords CSV file",
 			"2_sync_directory", "# directory to sync your passwords file #",
             "3_show_on_launch?", "1",
             "4_run_on_system_startup?", "0"
@@ -104,7 +98,7 @@ for req_col in required_columns
             col_count++
 if (col_count != required_columns.Length) {
     MsgBox("The CSV passwords file must contain the following columns:`n" '"name", "url", "username", "password"', "Error: Invalid CSV file")
-    IniWrite("# Please locate your passwords CSV file #", config_file, 'Settings', '1_passwords_csv_file')
+    IniWrite("Locate your passwords CSV file", config_file, 'Settings', '1_passwords_csv_file')
     Reload()
 }
 
@@ -112,6 +106,7 @@ A_TrayMenu.Add("Password Manager", (*) => (list_all_windows(), show()))
 A_TrayMenu.Add("Find this account", find_current_window)
 A_TrayMenu.Add("Lens", lens)
 A_TrayMenu.Add("Settings", open_settings)
+A_TrayMenu.Add("Exit", (*) => ExitApp())
 A_TrayMenu.Default := "Password Manager"
 A_TrayMenu.ClickCount := 1
 
@@ -173,8 +168,6 @@ Status_Bar.SetText("F3: Delete", 6)
 search()
 for col, loc in list_column_locations
     List_View.ModifyCol(loc, "Icon" icons[col])
-
-List_View.ModifyCol(list_column_locations['name'], "Sort")
 
 if (configuration['Settings']['3_show_on_launch?'])
     show()
@@ -380,7 +373,6 @@ list_all_windows(*) {
         }
 
         domain := RegExReplace(A_Clipboard, ".*://(.*?)/.*", "$1")
-        ; domain := RegExReplace(domain, "\.[^.]+$", "") ; remove .com, .edu...
         titles[1] := "Arc.exe -> " domain
     }
     
@@ -482,17 +474,19 @@ search(query := Search_Box.Text) {
                 List_View.Add("Icon-1", list_row*)
         }
     } catch Error {
-        IniWrite("# Please locate your passwords CSV file #", config_file, 'Settings', '1_passwords_csv_file')
+        IniWrite("Locate your passwords CSV file", config_file, 'Settings', '1_passwords_csv_file')
         Reload()    
     }
 
     if keywords.Length > 0
         List_View.ModifyCol(list_column_locations['rank'], "Integer SortDesc")
-    
+    else
+        List_View.ModifyCol(list_column_locations['name'], "Sort")
+
     List_View.Modify(1, "Focus Select")
     List_View.Opt("+Redraw")
 
-    Status_Bar.SetText(" " List_View.GetCount() " results")
+    try Status_Bar.SetText(" " List_View.GetCount() " results")
 
     return List_View.GetCount()
 }
@@ -611,7 +605,7 @@ replace_text_in_file(old_text?, new_text?, Filename := configuration['Settings']
     try {
         File_Text := FileRead(Filename)
     } catch Error {
-        IniWrite("# Please locate your passwords CSV file #", config_file, 'Settings', '1_passwords_csv_file')
+        IniWrite("Locate your passwords CSV file", config_file, 'Settings', '1_passwords_csv_file')
         Reload()    
     }
     
