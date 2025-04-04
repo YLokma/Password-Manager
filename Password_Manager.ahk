@@ -196,15 +196,20 @@ loop read configuration['Settings']['1_passwords_csv_file'] {
     loop parse A_LoopReadLine, "CSV" {
         if (A_Index = csv_column_locations["url"]) {
             domain := RegExReplace(A_LoopField, ".*://(.*?)/.*", "$1")
+            if icons.Has(domain)
+                break
+
             url := api . domain
-            Download("*0 " url, ico_file) ; *0 allow browser caching, increasing overall speed 
-            icons[domain] := IL_Add(image_list, ico_file)
+            try {
+                Download("*0 " url, ico_file) ; *0 allows browser caching, increasing overall speed 
+                icons[domain] := IL_Add(image_list, ico_file)
+            }
             break
         }
     }
-    Status_Bar.SetText(A_Index-1 " icons loaded", 2)
+    Status_Bar.SetText(icons.Count - required_columns.Length - 2 " icons loaded", 2)
 }
-FileDelete(ico_file)
+try FileDelete(ico_file)
 search()
 
 if (configuration['Settings']['3_show_on_launch?'])
@@ -622,9 +627,11 @@ account_gui(found_account_array?) {
         domain := RegExReplace(submitted_account.url, ".*://(.*?)/.*", "$1")
         url := api . domain
         if not icons.Has(domain) {
-            Download("*0 " url, A_Temp "\new_favicon.ico")
-            icons[domain] := IL_Add(image_list, A_Temp "\new_favicon.ico")
-            FileDelete(A_Temp "\new_favicon.ico")
+            try {
+                Download("*0 " url, A_Temp "\new_favicon.ico")
+                icons[domain] := IL_Add(image_list, A_Temp "\new_favicon.ico")
+                FileDelete(A_Temp "\new_favicon.ico")
+            }
         }
 
         search()
