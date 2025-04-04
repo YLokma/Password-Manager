@@ -1,5 +1,6 @@
 #SingleInstance Force
 config_file := "PM settings.ini"
+font_size := 10
 
 TraySetIcon("imageres.dll", 78, 1)
 A_TrayMenu.Delete()
@@ -56,7 +57,7 @@ password := '`0'
 
 PM_GUI := Gui("+Resize", "Password Manager")
 PM_GUI.BackColor := 'White'
-PM_GUI.SetFont("s10", 'Consolas')
+PM_GUI.SetFont("s" font_size, 'Consolas')
 PM_GUI.OnEvent("Escape", (*) => (ToolTip(), PM_GUI.Hide()))
 PM_GUI.OnEvent("Size", (GuiObj, MinMax, Width, Height) => MinMax == -1 ? "" : resize_window(Width, Height))
 
@@ -125,6 +126,12 @@ HotIfWinActive("ahk_id " PM_GUI.Hwnd)
     
     Hotkey('^a', (*) => Search_Box.Focus())
     Hotkey('^BackSpace', delete_word)
+
+    Hotkey('^WheelUp', (*) => change_font_size(1))
+    Hotkey('^WheelDown', (*) => change_font_size(-1))
+
+    Hotkey('+WheelUp', (*) => Send('{WheelLeft}'))
+    Hotkey('+WheelDown', (*) => Send('{{WheelRight}}'))
 HotIf
 
 list_columns := ["rank"]
@@ -158,12 +165,13 @@ List_View.OnEvent("DoubleClick", double_click_account)
 List_View.SetImageList(image_list, 1)
 
 Status_Bar := PM_GUI.AddStatusBar()
-Status_Bar.SetParts(100, 150, 135, 60, 80, 85)
+Status_Bar.SetParts(100, 150, 135, 60, 80, 85, 220)
 Status_Bar.SetText("Enter: copy account", 2)
 Status_Bar.SetText("Up/Down: navigate", 3)
 Status_Bar.SetText("F1: Add", 4)
 Status_Bar.SetText("F2: Modify", 5)
 Status_Bar.SetText("F3: Delete", 6)
+Status_Bar.SetText("Ctrl+WheelUp/WheelDown: zoom", 7)
 
 search()
 for col, loc in list_column_locations
@@ -176,6 +184,10 @@ if (configuration['Settings']['3_show_on_launch?'])
 ; --------------------------------- FUNCTIONS ---------------------------------
 ; =============================================================================
 
+change_font_size(change) {
+    global font_size += change
+    List_View.SetFont('s' font_size)
+}
 resize_window(w, h) {
     Search_Box.Move(,, w - 120)
     Add_Button.Move(w - 70)
@@ -297,7 +309,7 @@ open_settings(*) {
     revert_button.OnEvent("Click", (*) => (Settings_Gui.Destroy(), open_settings()))
     revert_button.SetFont("bold s12")
     revert_button.Description := "Revert all changes"
-    GuiButtonIcon(revert_button, "imageres.dll", 230, "s22 R120 A4")
+    GuiButtonIcon(revert_button, "imageres.dll", 230, "s22 R90 A4")
 
     Settings_Gui.Show()
     Settings_Gui.OnEvent("Escape", (*) => Settings_Gui.Hide())
@@ -408,7 +420,11 @@ show(*) {
         return
 
     List_View.Opt("-Redraw")
+    
     PM_GUI.Show()
+    PM_GUI.GetPos(, , &w, &h)
+    resize_window(w, h)
+
     List_View.Opt("+Redraw")
     Search_Box.Focus()
     
