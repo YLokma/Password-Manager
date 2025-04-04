@@ -4,6 +4,10 @@ font_size := 10
 
 TraySetIcon("imageres.dll", 78, 1)
 A_TrayMenu.Delete()
+A_TrayMenu.ClickCount := 1
+A_TrayMenu.Add("Settings", open_settings)
+A_TrayMenu.Add("Exit", (*) => ExitApp())
+A_TrayMenu.Default := "Settings"
 
 if FileExist(config_file) {
     configuration := Map()
@@ -46,11 +50,10 @@ if not FileExist(configuration['Settings']['1_passwords_csv_file']) {
     open_settings()
 }
 
-if configuration['Settings']['4_run_on_system_startup?'] {
+if configuration['Settings']['4_run_on_system_startup?']
     FileCreateShortcut(A_ScriptFullPath, A_Startup '\' RegExReplace(A_ScriptName, "\..*$", ".lnk"), , , , A_IsCompiled ? A_ScriptFullPath : A_IconFile)
-} else {
+else
     try FileDelete(A_Startup '\' RegExReplace(A_ScriptName, "\..*$", ".lnk"))
-}
 
 username := '`0'
 password := '`0'
@@ -64,21 +67,20 @@ PM_GUI.OnEvent("Size", (GuiObj, MinMax, Width, Height) => MinMax == -1 ? "" : re
 Search_Button := PM_GUI.AddButton("w25 h23 Default", '')
 Search_Button.OnEvent("Click", (*) => (PM_GUI.Hide(), WinActivate(StrSplit(list_all_windows()[1], " -> ")[2]), find_current_window()))
 Search_Button.Description := "Search for an account"
-GuiButtonIcon(Search_Button, "imageres.dll", 169, "A4")
-
-Search_Box := PM_GUI.AddComboBox("yp vSearch_Box")
-Search_Box.Description := "Enter your search query"
-Search_Box.OnEvent("Change", (*) => search())
+GuiButtonIcon(Search_Button, "imageres.dll", 169, "S15")
 
 Add_Button := PM_GUI.AddButton("w25 h23 yp", '')
 Add_Button.OnEvent("Click", (*) => account_gui())
 Add_Button.Description := "Add a new account"
-GuiButtonIcon(Add_Button, "imageres.dll", 248, "A4")
+GuiButtonIcon(Add_Button, "imageres.dll", 248, "S15")
 
 Settings_Button := PM_GUI.AddButton("w25 h23 yp", '')
 Settings_Button.OnEvent("Click", open_settings)
 Settings_Button.Description := "Open settings"
-GuiButtonIcon(Settings_Button, "imageres.dll", 110, "A4")
+GuiButtonIcon(Settings_Button, "imageres.dll", 110, "S15")
+
+Search_Box := PM_GUI.AddComboBox("yp w450 vSearch_Box")
+Search_Box.Description := "Enter your search query"
 
 while not FileExist(configuration['Settings']['1_passwords_csv_file'])
     Sleep(50)
@@ -98,11 +100,15 @@ for req_col in required_columns
         if (req_col = col)
             col_count++
 if (col_count != required_columns.Length) {
-    MsgBox("The CSV passwords file must contain the following columns:`n" '"name", "url", "username", "password"', "Error: Invalid CSV file")
-    IniWrite("Locate your passwords CSV file", config_file, 'Settings', '1_passwords_csv_file')
-    Reload()
+    result := MsgBox("The CSV passwords file must contain the following columns:`n" '"name", "url", "username", "password"', "Error: Invalid CSV file", "R/C Iconx")
+    if (result = "Retry") {
+        IniWrite("Locate your passwords CSV file", config_file, 'Settings', '1_passwords_csv_file')
+        Reload()
+    } else
+        ExitApp()
 }
 
+A_TrayMenu.Delete()
 A_TrayMenu.Add("Password Manager", (*) => (list_all_windows(), show()))
 A_TrayMenu.Add("Find this account", find_current_window)
 A_TrayMenu.Add("Lens", lens)
@@ -118,9 +124,11 @@ HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
     Hotkey(configuration['Hotkeys']['4_password_key'], (*) => password ? SendText(password) : "")
 HotIfWinActive("ahk_id " PM_GUI.Hwnd)
     Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F")), PM_GUI.Hide()))
+    Hotkey('^Enter', (*) => run_website(List_View.GetNext(, "F")))
     Hotkey('F1', (*) => account_gui())
     Hotkey('F2', (*) => modify_account(List_View.GetNext(, "F")))
-    Hotkey('F3', delete_account)
+    Hotkey('F3', (*) => delete_account(List_View.GetNext(, "F")))
+    Hotkey('F5', (*) => search())
     Hotkey('Up', (*) => move_selector(-1))
     Hotkey('Down', (*) => move_selector(+1))
     
@@ -134,8 +142,8 @@ HotIfWinActive("ahk_id " PM_GUI.Hwnd)
     Hotkey('+WheelDown', (*) => Send('{{WheelRight}}'))
 HotIf
 
-list_columns := ["rank"]
-list_columns.Push(csv_columns*)
+list_columns := csv_columns.Clone()
+list_columns.Push("rank")
 list_column_locations := Map()
 for col in list_columns
     list_column_locations[col] := A_Index
@@ -145,19 +153,19 @@ column_widths := Map(
 )
 column_widths.Default := 0.18 / (csv_columns.Length - required_columns.Length)
 
-image_list := IL_Create(5)
-icons := Map(
-    "rank", IL_Add(image_list, "imageres.dll", 205),
-    "username", IL_Add(image_list, "imageres.dll", 125),
-    "password", IL_Add(image_list, "imageres.dll", 301),
-    "name", IL_Add(image_list, "imageres.dll", 226),
-    "url", IL_Add(image_list, "imageres.dll", 171)
-)
-icons.Default := IL_Add(image_list, "imageres.dll", 95)
-
 rows_count := -1 ; to skip the header row
 loop read configuration['Settings']['1_passwords_csv_file']
     rows_count++
+
+image_list := IL_Create(1 + required_columns.Length + rows_count, 1)
+icons := Map(
+    "rank", IL_Add(image_list, "imageres.dll", 254),
+    "username", IL_Add(image_list, "imageres.dll", 125),
+    "password", IL_Add(image_list, "imageres.dll", 301),
+    "name", IL_Add(image_list, "imageres.dll", 205),
+    "url", IL_Add(image_list, "imageres.dll", 171)
+)
+icons.Default := IL_Add(image_list, "imageres.dll", 95)
 
 List_View := PM_GUI.AddListView("xm w600 h250 c555555 Count" rows_count " +Grid -Multi -E0x200 LV0x4000 LV0x40 LV0x800", list_columns)
 List_View.OnEvent("ContextMenu", (lv_obj, row_number, *) => (show_context_menu(row_number)))
@@ -165,17 +173,39 @@ List_View.OnEvent("DoubleClick", double_click_account)
 List_View.SetImageList(image_list, 1)
 
 Status_Bar := PM_GUI.AddStatusBar()
-Status_Bar.SetParts(100, 150, 135, 60, 80, 85, 220)
-Status_Bar.SetText("Enter: copy account", 2)
-Status_Bar.SetText("Up/Down: navigate", 3)
-Status_Bar.SetText("F1: Add", 4)
-Status_Bar.SetText("F2: Modify", 5)
-Status_Bar.SetText("F3: Delete", 6)
-Status_Bar.SetText("Ctrl+WheelUp/WheelDown: zoom", 7)
+Status_Bar.SetParts(100, 135, 150, 200, 135, 60, 80, 85, 220)
+Status_Bar.SetText("Enter: copy account", 3)
+Status_Bar.SetText("Ctrl+Enter: visit website", 4)
+Status_Bar.SetText("Up/Down: navigate", 5)
+Status_Bar.SetText("F1: Add", 6)
+Status_Bar.SetText("F2: Modify", 7)
+Status_Bar.SetText("F3: Delete", 8)
+Status_Bar.SetText("Ctrl+WheelUp/WheelDown: zoom", 9)
 
-search()
 for col, loc in list_column_locations
     List_View.ModifyCol(loc, "Icon" icons[col])
+
+icons.Default := -1
+search()
+Search_Box.OnEvent("Change", (*) => search())
+
+api := "http://www.google.com/s2/favicons?domain=", ico_file := A_Temp "\favicon.ico"
+loop read configuration['Settings']['1_passwords_csv_file'] {
+    if (A_Index = 1) ; Skip header
+        continue
+    loop parse A_LoopReadLine, "CSV" {
+        if (A_Index = csv_column_locations["url"]) {
+            domain := RegExReplace(A_LoopField, ".*://(.*?)/.*", "$1")
+            url := api . domain
+            Download("*0 " url, ico_file) ; *0 allow browser caching, increasing overall speed 
+            icons[domain] := IL_Add(image_list, ico_file)
+            break
+        }
+    }
+    Status_Bar.SetText(A_Index-1 " icons loaded", 2)
+}
+FileDelete(ico_file)
+search()
 
 if (configuration['Settings']['3_show_on_launch?'])
     show()
@@ -190,12 +220,13 @@ change_font_size(change) {
 }
 resize_window(w, h) {
     Search_Box.Move(,, w - 120)
-    Add_Button.Move(w - 70)
-    Settings_Button.Move(w - 40)
+    Search_Box.Redraw()
 
+    List_View.Opt("-Redraw")
     List_View.Move(,, w - 25, h - 70)
     for column in list_columns
-        List_View.ModifyCol(A_Index, Floor(column_widths[column] * (w - 50)))
+        List_View.ModifyCol(A_Index, column_widths[column] * (w - 50))
+    List_View.Opt("+Redraw")
 }
 delete_word(*) {
     if not Search_Box.Focused
@@ -314,7 +345,7 @@ open_settings(*) {
     Settings_Gui.Show()
     Settings_Gui.OnEvent("Escape", (*) => Settings_Gui.Hide())
 
-    SetTimer(show_descriptions, 250)
+    SetTimer(show_descriptions, 250, -5)
     format_key_name(keyname) {
         return StrTitle(StrReplace(RegExReplace(keyname, "^\d+_"), "_", " "))
     }
@@ -380,12 +411,12 @@ list_all_windows(*) {
         A_Clipboard := ""
         loop 2 {
             Send '^+c'
-            if ClipWait(0.5)
+            if ClipWait(1)
                 break
         }
 
         domain := RegExReplace(A_Clipboard, ".*://(.*?)/.*", "$1")
-        titles[1] := "Arc.exe -> " domain
+        titles[1] := domain " -> " A_Clipboard
     }
     
     Search_Box.Delete()
@@ -419,16 +450,14 @@ show(*) {
     if not IsSet(List_View)
         return
 
-    List_View.Opt("-Redraw")
-    
+    Critical "Off"
     PM_GUI.Show()
     PM_GUI.GetPos(, , &w, &h)
     resize_window(w, h)
 
-    List_View.Opt("+Redraw")
     Search_Box.Focus()
     
-    SetTimer(show_descriptions, 250)
+    SetTimer(show_descriptions, 250, -5)
 }
 show_descriptions() {
     if WinActive("ahk_pid " WinGetPID(A_ScriptHwnd)) {
@@ -454,7 +483,7 @@ search(query := Search_Box.Text) {
     List_View.Delete()
     List_View.Opt("-Redraw")
     delimiters := [',', ' ', '_', ';', '.', '-', '@', '(', ')', "'", '"']
-    
+
     if InStr(query, ' -> ') {
         app_name := StrSplit(query, ' -> ')[1]
         if (app_name)
@@ -474,20 +503,25 @@ search(query := Search_Box.Text) {
             loop parse A_LoopReadLine, "CSV"
                 csv_row.Push(A_LoopField)
 
-            rank := (keywords.Length = 0)
+            rank := (Search_Box.Text = "")
             
-            for word in StrSplit(csv_row[csv_column_locations["name"]], delimiters)
+            domain := RegExReplace(csv_row[csv_column_locations["url"]], ".*://(.*?)/.*", "$1")
+            rank += (4 * (domain = app_name))
+            
+            name := RegExReplace(csv_row[csv_column_locations["name"]], "\.[^.]+(\.[^.]+)?$", "") ; remove .com, .net, .gov.eg, .gov.sa... from name field
+
+            for word in StrSplit(name, delimiters)
                 rank += (3 * (app_name = word))
             
             for keyword in keywords
-                for word in StrSplit(csv_row[csv_column_locations["name"]], delimiters)
+                for word in StrSplit(name, delimiters)
                     if StrLen(keyword) > 0
                         rank += (Max(InStr(word, keyword) > 0, 2 * (word = keyword)))
 
-            list_row := []
-            list_row.Push(rank, csv_row*)
+            list_row := csv_row.Clone()
+            list_row.Push(rank)
             if rank
-                List_View.Add("Icon-1", list_row*)
+                List_View.Add("Icon" icons[domain], list_row*)
         }
     } catch Error {
         IniWrite("Locate your passwords CSV file", config_file, 'Settings', '1_passwords_csv_file')
@@ -538,30 +572,28 @@ modify_account(row) {
 }
 show_context_menu(row) {
     context_menu := Menu()
-    context_menu.Add("Go to website", run_website)
+    context_menu.Add("Go to website", (*) => run_website(List_View.GetNext(, "F")))
     context_menu.Add("Modify", (*) => modify_account(List_View.GetNext(, "F")))
-    context_menu.Add("Delete", delete_account)
+    context_menu.Add("Delete", (*) => delete_account(List_View.GetNext(, 'F')))
     context_menu.Show()
-    
-    run_website(ItemName, ItemPos, MyMenu) {
-        row := List_View.GetNext(, "F")
-        url := List_View.GetText(row, list_column_locations["url"])
-        name := List_View.GetText(row, list_column_locations["name"])
-        if (SubStr(url, 1, 4) == "http")
-            Run url
-        else if MsgBox("URL not found, do you want to search for it?", "Invalid URL", "Y/N") == "Yes"
-                Run "https://www.google.com/search?q=" StrReplace(name, ' ', '+')
-    }
 }
-account_gui(found_account_array := 0) {
-    New_Account_GUI := Gui(, "Add Account")
+run_website(row) {
+    url := List_View.GetText(row, list_column_locations["url"])
+    name := List_View.GetText(row, list_column_locations["name"])
+    if (SubStr(url, 1, 4) == "http")
+        Run url
+    else if MsgBox("URL not found, do you want to search for it?", "Invalid URL", "Y/N") == "Yes"
+            Run "https://www.google.com/search?q=" StrReplace(name, ' ', '+')
+}
+account_gui(found_account_array?) {
+    New_Account_GUI := Gui(, "Account Editor")
     New_Account_GUI.SetFont("s10", 'Consolas')
     New_Account_GUI.OnEvent("Escape", (*) => New_Account_GUI.Destroy())
 
     Recommendations := Map()
     
     for column in csv_columns {
-        if (found_account_array)
+        if IsSet(found_account_array)
             Recommendations[column] := [found_account_array[list_column_locations[column]]]
         else
             Recommendations[column] := []
@@ -573,28 +605,28 @@ account_gui(found_account_array := 0) {
     for column in csv_columns {
         New_Account_GUI.AddText("xm w200", column).SetFont("underline bold")
         New_Account_GUI.AddComboBox("xm wp v" column, Recommendations[column])
-        if found_account_array
+        if IsSet(found_account_array)
             New_Account_GUI[column].Value := 1
     }
-    New_Account_GUI.AddButton("xm Default w97", found_account_array ? "Modify" : "Create").OnEvent("Click", found_account_array ? modify : create)
+    New_Account_GUI.AddButton("xm Default w97", "Submit").OnEvent("Click", (*) => submit_account(IsSet(found_account_array) ? List_View.GetNext(, "F") : unset))
     
     New_Account_GUI.AddButton("yp w97", "Cancel").OnEvent("Click", (*) => New_Account_GUI.Destroy())  
     New_Account_GUI.Show()
     return New_Account_GUI
     
-    create(*) {
+    submit_account(old_account?) {
         submitted_account := New_Account_GUI.Submit()
         
-        replace_text_in_file(, csv_format(submitted_account))
-        Search_Box.Text := submitted_account.name
-        search()
-        sync_file()
-    }
-    modify(*) {
-        submitted_account := New_Account_GUI.Submit()
-        
-        replace_text_in_file(csv_format(List_View.GetNext(, 'F')), csv_format(submitted_account))
-        Search_Box.Text := submitted_account.name
+        replace_text_in_file(IsSet(old_account) ? csv_format(old_account) : unset, csv_format(submitted_account))
+
+        domain := RegExReplace(submitted_account.url, ".*://(.*?)/.*", "$1")
+        url := api . domain
+        if not icons.Has(domain) {
+            Download("*0 " url, A_Temp "\new_favicon.ico")
+            icons[domain] := IL_Add(image_list, A_Temp "\new_favicon.ico")
+            FileDelete(A_Temp "\new_favicon.ico")
+        }
+
         search()
         sync_file()
     }
@@ -634,14 +666,14 @@ replace_text_in_file(old_text?, new_text?, Filename := configuration['Settings']
     FileObj.Write(New_File_Text)
     FileObj.Close()
 }
-delete_account(*) {
-    if (MsgBox("Are you sure you want to delete this account?",,"Y/N Default2")) == "No"
+delete_account(row) {
+    if (MsgBox("Are you sure you want to delete this account?",,"Y/N Default2") == "No")
         return
 
-    replace_text_in_file(csv_format(List_View.GetNext(, 'F')), "")
+    replace_text_in_file(csv_format(row), "")
 
-    sync_file()
     search()
+    sync_file()
 }
 sync_file(Filename := configuration['Settings']['1_passwords_csv_file'], destination := configuration['Settings']['2_sync_directory']) {
     if DirExist(destination)
