@@ -1,6 +1,8 @@
 # Password Manager (AutoHotkey)
 
-This is a feature-rich Password Manager built using AutoHotkey (AHK). It allows users to securely manage their passwords, search for accounts, and perform various operations like adding, modifying, and deleting accounts. The program also includes advanced features like OCR-based text recognition, dynamic lens resizing, customizable border colors, and a user-friendly settings interface.
+This is a feature-rich Password Manager built using AutoHotkey (AHK). It allows users to manage their passwords, search for accounts, and perform various operations like adding, modifying, and deleting accounts. The program also includes advanced features like OCR-based text recognition, dynamic lens resizing, customizable border colors, and a user-friendly settings interface.
+
+![image](https://github.com/user-attachments/assets/c3efab5d-a3f3-4999-b414-81504c795a79)
 
 ## Features
 
@@ -14,6 +16,9 @@ This is a feature-rich Password Manager built using AutoHotkey (AHK). It allows 
 - **Find Current Account**: Automatically locate the account associated with the current application or website.
 - **Run on System Startup**: Optionally enable the program to run automatically when the system starts.
 - **Show on Launch**: Optionally display the Password Manager GUI immediately after launching the program.
+
+## Warning
+**Use with extreme caution**: This app makes your passwords very vulnerable if someone else accesses your computer, **it is not secure at all**. Use it **only if** you are willing to take the risk. You are a very easy target if anyone knows that you save your passwords in a CSV file.
 
 ## How It Works
 
@@ -38,6 +43,8 @@ Passwords are stored in a CSV file. The program reads this file to populate the 
 - **Modify** (`F2`): Edit an existing account directly from the list view or context menu.
 - **Delete** (`F3`): Remove an account after confirmation.
 
+![image](https://github.com/user-attachments/assets/2ff8b260-be52-4471-b002-523eb3aac8a9)
+
 ### 4. OCR Lens
 The OCR lens allows users to extract text from the screen. The lens dimensions and appearance can be adjusted dynamically using arrow keys:
 - **Arrow Keys**: Resize the lens (width and height).
@@ -45,33 +52,41 @@ The OCR lens allows users to extract text from the screen. The lens dimensions a
 - **Left Mouse Button**: Confirm the selection and extract text, then try to find the corresponding account.
 - **Dynamic Border Color and Thickness**: Adjust the lens border thickness and color dynamically using RGB sliders in the settings GUI.
 
+![image](https://github.com/user-attachments/assets/75eaebf2-5539-4e03-b40c-5969fb6ce85c)
+
 The extracted text can be used to search for accounts or perform other actions.
 
 ### 5. Settings GUI
 The settings GUI provides a tabbed interface to modify configurations:
 - **Hotkeys**: Customize shortcuts for various actions.
 - **Recommendations**: Manage recommended usernames and passwords.
-- **Settings**: Configure file paths, enable/disable relevance display, toggle "Run on System Startup," and "Show on Launch."
+- **Settings**: Configure file paths, toggle "Run on System Startup," and "Show on Launch."
 - **Lens**: Adjust lens dimensions, border color, and other properties dynamically.
+
+![image](https://github.com/user-attachments/assets/65d88add-34b8-4c5e-9027-07b7eab72ea2)
 
 ### 6. Synchronization
 The program can sync the password CSV file to a specified directory. This ensures that the file is backed up or accessible from other locations.
 
+![image](https://github.com/user-attachments/assets/b8467e61-25fc-4c3c-8347-74ac97ad7cb8)
+
+
 ## Usage
 
-1. **Run the Script**: Launch the script using AutoHotkey or as a compiled executable.
-2. **Find The Current Account**: Use the finder hotkey (`Ctrl+Alt+Space` by default) to find the current window or website's account. This feature matches the active window's title or URL with entries in the CSV file.
-3. **Search for Accounts**: Enter a search query in the search box to find accounts. The search results are ranked based on relevance.
-4. **Perform Actions**:
+1. **Run the Script**: Launch the AutoHotkey script or the compiled executable.
+3. **Find The Current Account**: Use the finder hotkey (`Ctrl+Alt+Space` by default) to find the current window or website's account. This feature matches the active window's title or URL with entries in the CSV file.
+4. **Search for Accounts**: Enter a search query in the search box to find accounts. The search results are ranked based on relevance.
+5. **Perform Actions**:
    - Double-click an account to copy its username and password.
    - Use the context menu to visit the website or modify/delete the account.
-5. **Use the OCR Lens**: Activate the lens (`Alt+L` by default) to extract text from the screen and search for the text it finds.
-6. **Modify Settings**: Open the settings GUI to customize configurations.
+6. **Use the OCR Lens**: Activate the lens (`Alt+L` by default) to extract text from the screen and search for the text it finds.
+7. **Modify Settings**: Open the settings GUI to customize configurations.
 
 ## Requirements
 
 - **AutoHotkey v2**: The script is written in AHK v2 and requires the corresponding runtime.
 - **OCR Library**: The script includes an OCR library for text recognition. Ensure the library file (`OCR Library.ahk`) is in the same directory.
+Note: neither requirement is needed when using the compiled (exe) version.
 
 ## File Structure
 
@@ -87,6 +102,7 @@ or
 - `passwords.csv`: CSV file containing all passwords and accounts (typically exported from Chrome).
 
 ### CSV Format
+
 The `passwords.csv` file should follow this format:
 | App/Website Name | URL             | Username       | Password       | Note (Optional) |
 |------------------|-----------------|----------------|----------------|-----------------|
@@ -94,14 +110,18 @@ The `passwords.csv` file should follow this format:
 
 The file should look like this:
 ```
-name,url,username,password,note
-Example_App1,https://app1.com,example_user1,example_pass1,This is a note
-Example_App2,https://app2.com,example_user2,example_pass2,Another note
-Example_App3,https://app3.com,example_user3,example_pass3,
+name,url,username,password
+Example_App1,https://app1.com,example_user1,example_pass1
+Example_App2,https://app2.com,example_user2,example_pass2
+Example_App3,https://app3.com,example_user3,example_pass3
+
 ```
+![image](https://github.com/user-attachments/assets/85452d61-a42e-4e11-8598-550dea28564a)
+
 - The columns can be rearranged, which will be reflected in the list view columns order.
 - The "note" column is entirely optional and can be removed from the file.
 - Every column name is case-sensitive and must follow the standard format shown above
+- The last line in the csv must be empty. If not, please add a new line at the end
 
 ## Notes
 
