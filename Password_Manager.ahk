@@ -453,7 +453,7 @@ show(*) {
     Critical "Off"
     PM_GUI.Show()
     PM_GUI.GetPos(, , &w, &h)
-    resize_window(w, h)
+    resize_window(w - 14, h - 40)
 
     Search_Box.Focus()
     
