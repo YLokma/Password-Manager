@@ -1,6 +1,7 @@
 #SingleInstance Force
 config_file := "PM settings.ini"
 font_size := 10
+favicon_api := "https://favicon.yandex.net/favicon/v2/{domain}" ; ?size=32 ; https://masjidalaqsa.com/boycott-safe/yandex
 
 TraySetIcon("imageres.dll", 78, 1)
 A_TrayMenu.Delete()
@@ -57,6 +58,7 @@ else
 
 username := '`0'
 password := '`0'
+window_titles := []
 
 PM_GUI := Gui("+Resize", "Password Manager")
 PM_GUI.BackColor := 'White'
@@ -64,10 +66,10 @@ PM_GUI.SetFont("s" font_size, 'Consolas')
 PM_GUI.OnEvent("Escape", (*) => (ToolTip(), PM_GUI.Hide()))
 PM_GUI.OnEvent("Size", (GuiObj, MinMax, Width, Height) => MinMax == -1 ? "" : resize_window(Width, Height))
 
-Search_Button := PM_GUI.AddButton("w25 h23 Default", '')
-Search_Button.OnEvent("Click", (*) => (PM_GUI.Hide(), WinActivate(StrSplit(list_all_windows()[1], " -> ")[2]), find_current_window()))
-Search_Button.Description := "Search for an account"
-GuiButtonIcon(Search_Button, "imageres.dll", 169, "S15")
+Lens_Button := PM_GUI.AddButton("w25 h23", '')
+Lens_Button.OnEvent("Click", (*) => (PM_GUI.Hide(), lens()))
+Lens_Button.Description := "Activate Lens"
+GuiButtonIcon(Lens_Button, "imageres.dll", 169, "S15")
 
 Add_Button := PM_GUI.AddButton("w25 h23 yp", '')
 Add_Button.OnEvent("Click", (*) => account_gui())
@@ -131,6 +133,9 @@ HotIfWinActive("ahk_id " PM_GUI.Hwnd)
     Hotkey('F5', (*) => search())
     Hotkey('Up', (*) => move_selector(-1))
     Hotkey('Down', (*) => move_selector(+1))
+
+    Hotkey('PgUp', (*) => (Search_Box.Value := Max(Search_Box.Value - 1, 1), search()))
+    Hotkey('PgDn', (*) => (Search_Box.Value := Min(Search_Box.Value + 1, window_titles.Length), search()))
     
     Hotkey('^a', (*) => Search_Box.Focus())
     Hotkey('^BackSpace', delete_word)
@@ -173,23 +178,23 @@ List_View.OnEvent("DoubleClick", double_click_account)
 List_View.SetImageList(image_list, 1)
 
 Status_Bar := PM_GUI.AddStatusBar()
-Status_Bar.SetParts(100, 135, 150, 200, 135, 60, 80, 85, 220)
-Status_Bar.SetText("Enter: copy account", 3)
-Status_Bar.SetText("Ctrl+Enter: visit website", 4)
-Status_Bar.SetText("Up/Down: navigate", 5)
-Status_Bar.SetText("F1: Add", 6)
-Status_Bar.SetText("F2: Modify", 7)
-Status_Bar.SetText("F3: Delete", 8)
-Status_Bar.SetText("Ctrl+WheelUp/WheelDown: zoom", 9)
+sb_text := " ### results | ### favicons | F1: Add | F2: Modify | F3: Delete | Enter: copy account | Ctrl+Enter: visit website | Up/Down: navigate | Page Up/Down: select window | Ctrl+WheelUp/WheelDown: zoom "
+sb_parts := StrSplit(sb_text, '|')
+sb_parts_lengths := []
+for part in sb_parts
+    sb_parts_lengths.Push((StrLen(part) * 7.6))
+Status_Bar.SetParts(sb_parts_lengths*)
+for part in sb_parts
+    Status_Bar.SetText(part, A_Index)
 
 for col, loc in list_column_locations
     List_View.ModifyCol(loc, "Icon" icons[col])
 
 icons.Default := -1
-search()
 Search_Box.OnEvent("Change", (*) => search())
+Status_Bar.SetText(" icons loading ", 2)
 
-api := "http://www.google.com/s2/favicons?domain=", ico_file := A_Temp "\favicon.ico"
+ico_file := A_Temp "\favicon.ico"
 loop read configuration['Settings']['1_passwords_csv_file'] {
     if (A_Index = 1) ; Skip header
         continue
@@ -199,7 +204,7 @@ loop read configuration['Settings']['1_passwords_csv_file'] {
             if icons.Has(domain)
                 break
 
-            url := api . domain
+            url := StrReplace(favicon_api, "{domain}", domain)
             try {
                 Download("*0 " url, ico_file) ; *0 allows browser caching, increasing overall speed 
                 icons[domain] := IL_Add(image_list, ico_file)
@@ -207,8 +212,8 @@ loop read configuration['Settings']['1_passwords_csv_file'] {
             break
         }
     }
-    Status_Bar.SetText(icons.Count - required_columns.Length - 2 " icons loaded", 2)
 }
+Status_Bar.SetText(' ' icons.Count - required_columns.Length - 2 " favicons ", 2)
 try FileDelete(ico_file)
 search()
 
@@ -222,10 +227,13 @@ if (configuration['Settings']['3_show_on_launch?'])
 change_font_size(change) {
     global font_size += change
     List_View.SetFont('s' font_size)
+    for col in list_columns
+        List_View.ModifyCol(A_Index, , col)
 }
 resize_window(w, h) {
+    Search_Box.Opt("-Redraw")
     Search_Box.Move(,, w - 120)
-    Search_Box.Redraw()
+    Search_Box.Opt("+Redraw")
 
     List_View.Opt("-Redraw")
     List_View.Move(,, w - 25, h - 70)
@@ -244,7 +252,7 @@ lens(*) {
     query := OCR_Under_Mouse()
     if not query
         return
-  
+    
     Search_Box.Text := query
     rows := search()
     
@@ -398,18 +406,18 @@ list_all_windows(*) {
     window_IDs := WinGetList()
     old_text := Search_Box.Text
 
-    titles := []
+    global window_titles := []
     for window_ID in window_IDs {
         title := WinGetTitle(window_ID)
         app_name := WinGetProcessName(window_ID)
         if (title)
             if (app_name != "explorer.exe" and app_name != "AutoHotkey64.exe")
-                titles.Push(app_name ' -> ' title)
+                window_titles.Push(app_name ' -> ' title)
     }
-    if not titles.Has(1)
+    if not window_titles.Has(1)
         return
     
-    if (InStr(titles[1], "Arc.exe -> ")) {
+    if (InStr(window_titles[1], "Arc.exe -> ")) {
         WinActivate('ahk_exe Arc.exe')
         WinwaitActive('ahk_exe Arc.exe')
 
@@ -421,14 +429,12 @@ list_all_windows(*) {
         }
 
         domain := RegExReplace(A_Clipboard, ".*://(.*?)/.*", "$1")
-        titles[1] := domain " -> " A_Clipboard
+        window_titles[1] := domain " -> " A_Clipboard
     }
     
     Search_Box.Delete()
-    Search_Box.Add(titles)
+    Search_Box.Add(window_titles)
     Search_Box.Text := old_text
-
-    return titles
 }
 find_current_window(*) {
     list_all_windows()
@@ -454,8 +460,8 @@ find_current_window(*) {
 show(*) {
     if not IsSet(List_View)
         return
+    search()
 
-    Critical "Off"
     PM_GUI.Show()
     PM_GUI.GetPos(, , &w, &h)
     resize_window(w - 14, h - 40)
@@ -541,7 +547,7 @@ search(query := Search_Box.Text) {
     List_View.Modify(1, "Focus Select")
     List_View.Opt("+Redraw")
 
-    try Status_Bar.SetText(" " List_View.GetCount() " results")
+    try Status_Bar.SetText(" " List_View.GetCount() " results ")
 
     return List_View.GetCount()
 }
@@ -623,14 +629,14 @@ account_gui(found_account_array?) {
         submitted_account := New_Account_GUI.Submit()
         
         replace_text_in_file(IsSet(old_account) ? csv_format(old_account) : unset, csv_format(submitted_account))
-
+        ico_file := A_Temp "\new_favicon.ico"
         domain := RegExReplace(submitted_account.url, ".*://(.*?)/.*", "$1")
-        url := api . domain
+        url := StrReplace(favicon_api, "{domain}", domain)
         if not icons.Has(domain) {
             try {
-                Download("*0 " url, A_Temp "\new_favicon.ico")
-                icons[domain] := IL_Add(image_list, A_Temp "\new_favicon.ico")
-                FileDelete(A_Temp "\new_favicon.ico")
+                Download("*0 " url, ico_file)
+                icons[domain] := IL_Add(image_list, ico_file)
+                FileDelete(ico_file)
             }
         }
 
