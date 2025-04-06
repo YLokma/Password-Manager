@@ -47,7 +47,7 @@ if FileExist(config_file) {
 	)
 }
 if not FileExist(configuration['Settings']['1_passwords_csv_file']) {
-    MsgBox("Please locate your passwords CSV file", "Error: non-existent passwords file")
+    MsgBox("Please locate your passwords CSV file", "Error: non-existent passwords file", "Icon!")
     open_settings()
 }
 
@@ -593,7 +593,7 @@ run_website(row) {
     name := List_View.GetText(row, list_column_locations["name"])
     if (SubStr(url, 1, 4) == "http")
         Run url
-    else if MsgBox("URL not found, do you want to search for it?", "Invalid URL", "Y/N") == "Yes"
+    else if MsgBox("URL not found, do you want to search for it?", "Invalid URL", "Y/N Icon?") == "Yes"
             Run "https://www.google.com/search?q=" StrReplace(name, ' ', '+')
 }
 account_gui(found_account_array?) {
@@ -648,14 +648,14 @@ csv_format(source) {
     formatted_text := ""
     
     for column in csv_columns {
-        if IsNumber(source) {
-            formatted_text .= List_View.GetText(source, list_column_locations[column])
-        }
+        if IsNumber(source)
+            field := List_View.GetText(source, list_column_locations[column])
         else if IsObject(source)
-            formatted_text .= source.%column%
+            field := source.%column%
         else
             return
         
+        formatted_text .= ((InStr(field, '"') or InStr(field, ',')) ? '"' StrReplace(field, '"', '""') '"' : field) ; handle literal quotes and commas        
         if (A_Index < csv_columns.Length)
             formatted_text .= ','
     }
@@ -680,7 +680,7 @@ replace_text_in_file(old_text?, new_text?, Filename := configuration['Settings']
     FileObj.Close()
 }
 delete_account(row) {
-    if (MsgBox("Are you sure you want to delete this account?",,"Y/N Default2") == "No")
+    if MsgBox("Are you sure you want to delete this account?",,"Y/N Default2 Icon!") == "No"
         return
 
     replace_text_in_file(csv_format(row), "")
