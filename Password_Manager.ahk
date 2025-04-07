@@ -72,7 +72,7 @@ Lens_Button.Description := "Activate Lens"
 GuiButtonIcon(Lens_Button, "imageres.dll", 169, "S15")
 
 Add_Button := PM_GUI.AddButton("w25 h23 yp", '')
-Add_Button.OnEvent("Click", (*) => account_gui())
+Add_Button.OnEvent("Click", (*) => open_account_editor_gui())
 Add_Button.Description := "Add a new account"
 GuiButtonIcon(Add_Button, "imageres.dll", 248, "S15")
 
@@ -127,20 +127,22 @@ HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
 HotIfWinActive("ahk_id " PM_GUI.Hwnd)
     Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F")), PM_GUI.Hide()))
     Hotkey('^Enter', (*) => run_website(List_View.GetNext(, "F")))
-    Hotkey('F1', (*) => account_gui())
-    Hotkey('F2', (*) => modify_account(List_View.GetNext(, "F")))
+    Hotkey('F1', (*) => open_account_editor_gui())
+    Hotkey('F2', (*) => open_account_editor_gui(List_View.GetNext(, "F")))
     Hotkey('F3', (*) => delete_account(List_View.GetNext(, "F")))
+    Hotkey('F4', (*) => Search_Box.Focus())
     Hotkey('F5', (*) => search())
+
     Hotkey('Up', (*) => move_selector(-1))
     Hotkey('Down', (*) => move_selector(+1))
 
-    Hotkey('PgUp', (*) => (Search_Box.Value := Max(Search_Box.Value - 1, 1), search()))
+    Hotkey('PgUp', (*) => (Search_Box.Value := Max(Search_Box.Value - 1, 0), search()))
     Hotkey('PgDn', (*) => (Search_Box.Value := Min(Search_Box.Value + 1, window_titles.Length), search()))
     
     Hotkey('^a', (*) => Search_Box.Focus())
     Hotkey('^BackSpace', delete_word)
 
-    Hotkey('^WheelUp', (*) => change_font_size(1))
+    Hotkey('^WheelUp', (*) => change_font_size(+1))
     Hotkey('^WheelDown', (*) => change_font_size(-1))
 
     Hotkey('+WheelUp', (*) => Send('{WheelLeft}'))
@@ -178,7 +180,7 @@ List_View.OnEvent("DoubleClick", double_click_account)
 List_View.SetImageList(image_list, 1)
 
 Status_Bar := PM_GUI.AddStatusBar()
-sb_text := " ### results | ### favicons | F1: Add | F2: Modify | F3: Delete | Enter: copy account | Ctrl+Enter: visit website | Up/Down: navigate | Page Up/Down: select window | Ctrl+WheelUp/WheelDown: zoom "
+sb_text := " ### results | ### favicons | F1: Add | F2: Edit | F3: Delete | Enter: copy account | Ctrl+Enter: visit website | Up/Down: navigate | Page Up/Down: select window | Ctrl+WheelUp/WheelDown: zoom "
 sb_parts := StrSplit(sb_text, '|')
 sb_parts_lengths := []
 for part in sb_parts
@@ -213,7 +215,7 @@ loop read configuration['Settings']['1_passwords_csv_file'] {
         }
     }
 }
-Status_Bar.SetText(' ' icons.Count - required_columns.Length - 2 " favicons ", 2)
+Status_Bar.SetText(' ' icons.Count - required_columns.Length - 1 " favicons ", 2)
 try FileDelete(ico_file)
 search()
 
@@ -225,6 +227,9 @@ if (configuration['Settings']['3_show_on_launch?'])
 ; =============================================================================
 
 change_font_size(change) {
+    if (font_size + change < 8) or (font_size + change > 28)
+        return
+
     global font_size += change
     List_View.SetFont('s' font_size)
     for col in list_columns
@@ -575,16 +580,10 @@ copy_account(row) {
         password := '`0'
     }
 }
-modify_account(row) {
-    arr := []
-    for col in list_columns
-        arr.Push(List_View.GetText(row, A_Index))
-    account_gui(arr)
-}
 show_context_menu(row) {
     context_menu := Menu()
     context_menu.Add("Go to website", (*) => run_website(List_View.GetNext(, "F")))
-    context_menu.Add("Modify", (*) => modify_account(List_View.GetNext(, "F")))
+    context_menu.Add("Edit", (*) => open_account_editor_gui(List_View.GetNext(, "F")))
     context_menu.Add("Delete", (*) => delete_account(List_View.GetNext(, 'F')))
     context_menu.Show()
 }
@@ -596,16 +595,16 @@ run_website(row) {
     else if MsgBox("URL not found, do you want to search for it?", "Invalid URL", "Y/N Icon?") == "Yes"
             Run "https://www.google.com/search?q=" StrReplace(name, ' ', '+')
 }
-account_gui(found_account_array?) {
-    New_Account_GUI := Gui(, "Account Editor")
-    New_Account_GUI.SetFont("s10", 'Consolas')
-    New_Account_GUI.OnEvent("Escape", (*) => New_Account_GUI.Destroy())
+open_account_editor_gui(row?) {
+    Account_Editor_GUI := Gui(, "Account Editor")
+    Account_Editor_GUI.SetFont("s10", 'Consolas')
+    Account_Editor_GUI.OnEvent("Escape", (*) => Account_Editor_GUI.Destroy())
 
     Recommendations := Map()
     
     for column in csv_columns {
-        if IsSet(found_account_array)
-            Recommendations[column] := [found_account_array[list_column_locations[column]]]
+        if IsSet(row)
+            Recommendations[column] := [List_View.GetText(row, list_column_locations[column])]
         else
             Recommendations[column] := []
     }
@@ -614,19 +613,18 @@ account_gui(found_account_array?) {
 	Recommendations["password"].Push(StrSplit(configuration['Recommendations']['2_recommended_passwords'], ", ")*)
 
     for column in csv_columns {
-        New_Account_GUI.AddText("xm w200", column).SetFont("underline bold")
-        New_Account_GUI.AddComboBox("xm wp v" column, Recommendations[column])
-        if IsSet(found_account_array)
-            New_Account_GUI[column].Value := 1
+        Account_Editor_GUI.AddText("xm w200", column).SetFont("underline bold")
+        Account_Editor_GUI.AddComboBox("xm wp v" column, Recommendations[column])
+        if IsSet(row)
+            Account_Editor_GUI[column].Value := 1
     }
-    New_Account_GUI.AddButton("xm Default w97", "Submit").OnEvent("Click", (*) => submit_account(IsSet(found_account_array) ? List_View.GetNext(, "F") : unset))
+    Account_Editor_GUI.AddButton("xm Default w97", "Submit").OnEvent("Click", (*) => submit_account(IsSet(row) ? row : unset))
     
-    New_Account_GUI.AddButton("yp w97", "Cancel").OnEvent("Click", (*) => New_Account_GUI.Destroy())  
-    New_Account_GUI.Show()
-    return New_Account_GUI
+    Account_Editor_GUI.AddButton("yp w97", "Cancel").OnEvent("Click", (*) => Account_Editor_GUI.Destroy())  
+    Account_Editor_GUI.Show()
     
     submit_account(old_account?) {
-        submitted_account := New_Account_GUI.Submit()
+        submitted_account := Account_Editor_GUI.Submit()
         
         replace_text_in_file(IsSet(old_account) ? csv_format(old_account) : unset, csv_format(submitted_account))
         ico_file := A_Temp "\new_favicon.ico"
