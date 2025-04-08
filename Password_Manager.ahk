@@ -498,15 +498,15 @@ double_click_account(list, row) {
 search(query := Search_Box.Text) {
     List_View.Delete()
     List_View.Opt("-Redraw")
-    delimiters := [',', ' ', '_', ';', '.', '-', '@', '(', ')', "'", '"']
+    delimiters := [',', ' ', ';', '.', '-', '@', '(', ')', "'", '"']
 
     if InStr(query, ' -> ') {
-        app_name := StrSplit(query, ' -> ')[1]
-        if (app_name)
-            query := StrReplace(query, app_name, "", 1,, 1)
-        app_name := StrReplace(app_name, ".exe", "", 1,, 1)
+        search_app_name := StrSplit(query, ' -> ')[1]
+        if (search_app_name)
+            query := StrReplace(query, search_app_name, "", 1,, 1)
+        search_app_name := StrReplace(search_app_name, ".exe", "", 1,, 1)
     } else
-        app_name := "`0"
+        search_app_name := "`0"
     
     keywords := StrSplit(query, delimiters)
 
@@ -521,23 +521,23 @@ search(query := Search_Box.Text) {
 
             rank := (Search_Box.Text = "")
             
-            domain := RegExReplace(csv_row[csv_column_locations["url"]], ".*://(.*?)/.*", "$1")
-            rank += (4 * (domain = app_name))
+            row_domain := RegExReplace(csv_row[csv_column_locations["url"]], ".*://(.*?)/.*", "$1")
+            if row_domain
+                rank += (4 * (row_domain = search_app_name))
             
-            name := RegExReplace(csv_row[csv_column_locations["name"]], "\.[^.]+(\.[^.]+)?$", "") ; remove .com, .net, .gov.eg, .gov.sa... from name field
-
-            for word in StrSplit(name, delimiters)
-                rank += (3 * (app_name = word))
+            row_name := RegExReplace(csv_row[csv_column_locations["name"]], "\.[^.]+(\.[^.]+)?$", "") ; remove .com, .net, .gov.eg, .gov.sa... from name field
+            for word in StrSplit(row_name, delimiters)
+                rank += (3 * (search_app_name = word))
             
             for keyword in keywords
-                for word in StrSplit(name, delimiters)
+                for word in StrSplit(row_name, delimiters)
                     if StrLen(keyword) > 0
                         rank += (Max(InStr(word, keyword) > 0, 2 * (word = keyword)))
 
             list_row := csv_row.Clone()
             list_row.Push(rank)
             if rank
-                List_View.Add("Icon" icons[domain], list_row*)
+                List_View.Add("Icon" icons[row_domain], list_row*)
         }
     } catch Error {
         IniWrite("Locate your passwords CSV file", config_file, 'Settings', '1_passwords_csv_file')
