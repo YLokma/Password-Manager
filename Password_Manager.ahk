@@ -7,6 +7,7 @@ TraySetIcon("imageres.dll", 78, 1)
 A_TrayMenu.Delete()
 A_TrayMenu.ClickCount := 1
 A_TrayMenu.Add("Settings", open_settings)
+A_TrayMenu.Add("Reload", (*) => Reload())
 A_TrayMenu.Add("Exit", (*) => ExitApp())
 A_TrayMenu.Default := "Settings"
 
@@ -16,7 +17,7 @@ if FileExist(config_file) {
 		configuration[section] := Map()
 		for line in StrSplit(IniRead(config_file, section),"`n", '`r') {
 			pair := StrSplit(line, "=")
-			configuration[section][pair[1]] := StrReplace(pair[2], '"', "")
+			configuration[section][pair[1]] := pair[2]
 		}
 	}
 } else {
@@ -72,7 +73,7 @@ Lens_Button.Description := "Activate Lens"
 GuiButtonIcon(Lens_Button, "imageres.dll", 169, "S15")
 
 Add_Button := PM_GUI.AddButton("w25 h23 yp", '')
-Add_Button.OnEvent("Click", (*) => open_account_editor_gui())
+Add_Button.OnEvent("Click", (*) => open_account_editor())
 Add_Button.Description := "Add a new account"
 GuiButtonIcon(Add_Button, "imageres.dll", 248, "S15")
 
@@ -115,6 +116,7 @@ A_TrayMenu.Add("Password Manager", (*) => (list_all_windows(), show()))
 A_TrayMenu.Add("Find this account", find_current_window)
 A_TrayMenu.Add("Lens", lens)
 A_TrayMenu.Add("Settings", open_settings)
+A_TrayMenu.Add("Reload", (*) => Reload())
 A_TrayMenu.Add("Exit", (*) => ExitApp())
 A_TrayMenu.Default := "Password Manager"
 A_TrayMenu.ClickCount := 1
@@ -127,8 +129,8 @@ HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
 HotIfWinActive("ahk_id " PM_GUI.Hwnd)
     Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F")), PM_GUI.Hide()))
     Hotkey('^Enter', (*) => run_website(List_View.GetNext(, "F")))
-    Hotkey('F1', (*) => open_account_editor_gui())
-    Hotkey('F2', (*) => open_account_editor_gui(List_View.GetNext(, "F")))
+    Hotkey('F1', (*) => open_account_editor())
+    Hotkey('F2', (*) => open_account_editor(List_View.GetNext(, "F")))
     Hotkey('F3', (*) => delete_account(List_View.GetNext(, "F")))
     Hotkey('F4', (*) => Search_Box.Focus())
     Hotkey('F5', (*) => search())
@@ -146,7 +148,7 @@ HotIfWinActive("ahk_id " PM_GUI.Hwnd)
     Hotkey('^WheelDown', (*) => change_font_size(-1))
 
     Hotkey('+WheelUp', (*) => Send('{WheelLeft}'))
-    Hotkey('+WheelDown', (*) => Send('{{WheelRight}}'))
+    Hotkey('+WheelDown', (*) => Send('{WheelRight}'))
 HotIf
 
 list_columns := csv_columns.Clone()
@@ -298,7 +300,9 @@ open_settings(*) {
     for key, value in configuration['Recommendations'] {
 		Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline bold")
 
-		text := StrReplace(value, ", ", "`n")
+		text := ''
+        loop parse value, "CSV"
+            text .= (A_Index > 1 ? "`n" : "") A_LoopField
 		Settings_Gui.AddEdit("wp r10 v" key, text)
     }
 
@@ -399,10 +403,22 @@ open_settings(*) {
                     configuration[name][key] := new_configuration.%key%
             }
         }
-    
-        for name, section in configuration
-            for key, value in section
-                    IniWrite(StrReplace(value, "`n", ", "), config_file, name, key)
+        
+        for name, section in configuration {
+            for key, value in section {
+                if name = "Recommendations" {
+                    formatted_text := ''
+                    for line in StrSplit(value, "`n") {
+                        if (A_Index > 1)
+                            formatted_text .= ','
+                        formatted_text .= '"' ((InStr(line, '"') or InStr(line, ',')) ?  StrReplace(line, '"', '""') : line) '"'
+                    }
+                    IniWrite(formatted_text, config_file, name, key)
+                }
+                else
+                    IniWrite(value, config_file, name, key)
+            }
+        }
         Reload()
     }
 }
@@ -525,7 +541,7 @@ search(query := Search_Box.Text) {
             if row_domain
                 rank += (4 * (row_domain = search_app_name))
             
-            row_name := RegExReplace(csv_row[csv_column_locations["name"]], "\.[^.]+(\.[^.]+)?$", "") ; remove .com, .net, .gov.eg, .gov.sa... from name field
+            row_name := RegExReplace(csv_row[csv_column_locations["name"]], "\.[^.]+$", "") ; remove the domain extension from the name field
             for word in StrSplit(row_name, delimiters)
                 rank += (3 * (search_app_name = word))
             
@@ -583,7 +599,7 @@ copy_account(row) {
 show_context_menu(row) {
     context_menu := Menu()
     context_menu.Add("Go to website", (*) => run_website(List_View.GetNext(, "F")))
-    context_menu.Add("Edit", (*) => open_account_editor_gui(List_View.GetNext(, "F")))
+    context_menu.Add("Edit", (*) => open_account_editor(List_View.GetNext(, "F")))
     context_menu.Add("Delete", (*) => delete_account(List_View.GetNext(, 'F')))
     context_menu.Show()
 }
@@ -595,7 +611,7 @@ run_website(row) {
     else if MsgBox("URL not found, do you want to search for it?", "Invalid URL", "Y/N Icon?") == "Yes"
             Run "https://www.google.com/search?q=" StrReplace(name, ' ', '+')
 }
-open_account_editor_gui(row?) {
+open_account_editor(row?) {
     Account_Editor_GUI := Gui(, "Account Editor")
     Account_Editor_GUI.SetFont("s10", 'Consolas')
     Account_Editor_GUI.OnEvent("Escape", (*) => Account_Editor_GUI.Destroy())
@@ -609,8 +625,12 @@ open_account_editor_gui(row?) {
             Recommendations[column] := []
     }
     
-	Recommendations["username"].Push(StrSplit(configuration['Recommendations']['1_recommended_usernames'], ", ")*)
-	Recommendations["password"].Push(StrSplit(configuration['Recommendations']['2_recommended_passwords'], ", ")*)
+    loop parse configuration['Recommendations']['1_recommended_usernames'], "CSV"
+        if A_LoopField !== (Recommendations["username"].Has(1) ? Recommendations["username"][1] : '')
+            Recommendations["username"].Push(A_LoopField)
+    loop parse configuration['Recommendations']['2_recommended_passwords'], "CSV"
+        if A_LoopField !== (Recommendations["password"].Has(1) ? Recommendations["password"][1] : '')
+            Recommendations["password"].Push(A_LoopField)
 
     for column in csv_columns {
         Account_Editor_GUI.AddText("xm w200", column).SetFont("underline bold")
@@ -635,6 +655,7 @@ open_account_editor_gui(row?) {
                 Download("*0 " url, ico_file)
                 icons[domain] := IL_Add(image_list, ico_file)
                 FileDelete(ico_file)
+                Status_Bar.SetText(' ' icons.Count - required_columns.Length - 1 " favicons ", 2)
             }
         }
 
@@ -648,7 +669,7 @@ csv_format(source) {
     for column in csv_columns {
         if IsNumber(source)
             field := List_View.GetText(source, list_column_locations[column])
-        else if IsObject(source)
+        else if source.HasProp(column)
             field := source.%column%
         else
             return
