@@ -35,8 +35,8 @@ if FileExist(config_file) {
 		"Settings", Map(
 			"1_passwords_csv_file", "Locate your passwords CSV file",
 			"2_sync_directory", "# directory to sync your passwords file #",
-            "3_show_on_launch?", "1",
-            "4_run_on_system_startup?", "0"
+            "4_show_on_launch?", "1",
+            "5_run_on_system_startup?", "0"
 		),
         "Lens", Map(
             "1_lens_width", "150",
@@ -52,7 +52,7 @@ if not FileExist(configuration['Settings']['1_passwords_csv_file']) {
     open_settings()
 }
 
-if configuration['Settings']['4_run_on_system_startup?']
+if configuration['Settings']['5_run_on_system_startup?']
     FileCreateShortcut(A_ScriptFullPath, A_Startup '\' RegExReplace(A_ScriptName, "\..*$", ".lnk"), , , , A_IsCompiled ? A_ScriptFullPath : A_IconFile)
 else
     try FileDelete(A_Startup '\' RegExReplace(A_ScriptName, "\..*$", ".lnk"))
@@ -124,8 +124,8 @@ A_TrayMenu.ClickCount := 1
 HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
     Hotkey(configuration['Hotkeys']['1_account_finder_key'], find_current_window)
     Hotkey(configuration['Hotkeys']['2_lens_key'], lens)
-    Hotkey(configuration['Hotkeys']['3_username_key'], (*) => username ? SendText(username) : "")
-    Hotkey(configuration['Hotkeys']['4_password_key'], (*) => password ? SendText(password) : "")
+    Hotkey(configuration['Hotkeys']['3_username_key'], (*) => (username ? SendText(username) : (find_current_window(), SendText(username), clear_username())))
+    Hotkey(configuration['Hotkeys']['4_password_key'], (*) => (password ? SendText(password) : (find_current_window(), SendText(password), clear_password())))
 HotIfWinActive("ahk_id " PM_GUI.Hwnd)
     Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F")), PM_GUI.Hide()))
     Hotkey('^Enter', (*) => run_website(List_View.GetNext(, "F")))
@@ -194,8 +194,28 @@ for part in sb_parts
 for col, loc in list_column_locations
     List_View.ModifyCol(loc, "Icon" icons[col])
 
+Term_Frequencies := Map(), found_names := Map()
+Term_Frequencies.CaseSense := false, Term_Frequencies.Default := 1
+loop read configuration['Settings']['1_passwords_csv_file'] {
+    if (A_Index = 1) ; Skip header
+        continue
+    loop parse A_LoopReadLine, "CSV" {
+        if (A_Index == csv_column_locations["name"]) {
+            if found_names.Has(A_LoopField)
+                break
+            for word in StrSplit(A_LoopField, [',', ' ', ';', '.', '-', '@', '(', ')', "'", '"']) {
+                if Term_Frequencies.Has(word)
+                    Term_Frequencies[word] += 1
+                else
+                    Term_Frequencies[word] := 1
+            }
+            found_names[A_LoopField] := 1
+        }
+    }
+}
+
 icons.Default := -1
-Search_Box.OnEvent("Change", (*) => search())
+Search_Box.OnEvent("Change", (*) => SetTimer(search, -5))
 Status_Bar.SetText(" icons loading ", 2)
 
 ico_file := A_Temp "\favicon.ico"
@@ -221,7 +241,7 @@ Status_Bar.SetText(' ' icons.Count - required_columns.Length - 1 " favicons ", 2
 try FileDelete(ico_file)
 search()
 
-if (configuration['Settings']['3_show_on_launch?'])
+if (configuration['Settings']['4_show_on_launch?'])
     show()
 
 ; =============================================================================
@@ -310,6 +330,10 @@ open_settings(*) {
     for key, value in configuration['Settings'] {
         if InStr(key, "?")
             Settings_Gui.AddCheckbox("wp v" key " " (value ? "Checked" : ""), format_key_name(key)).SetFont("underline bold")
+        else if InStr(key, 'percentage') {
+            Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline bold")
+            Settings_Gui.AddSlider("wp ToolTip v" key " Range0-100", value)
+        }
         else {
             Settings_Gui.AddText("wp", format_key_name(key)).SetFont("underline bold")
             Settings_Gui.AddEdit("wp Disabled v" key, value).SetFont("s10 bold")
@@ -534,25 +558,36 @@ search(query := Search_Box.Text) {
             csv_row := []
             loop parse A_LoopReadLine, "CSV"
                 csv_row.Push(A_LoopField)
-
-            rank := (Search_Box.Text = "")
-            
             row_domain := RegExReplace(csv_row[csv_column_locations["url"]], ".*://(.*?)/.*", "$1")
-            if row_domain
-                rank += (4 * (row_domain = search_app_name))
-            
-            row_name := RegExReplace(csv_row[csv_column_locations["name"]], "\.[^.]+$", "") ; remove the domain extension from the name field
-            for word in StrSplit(row_name, delimiters)
-                rank += (3 * (search_app_name = word))
-            
-            for keyword in keywords
-                for word in StrSplit(row_name, delimiters)
-                    if StrLen(keyword) > 0
-                        rank += (Max(InStr(word, keyword) > 0, 2 * (word = keyword)))
 
+            if Search_Box.Text = "" {
+                rank := 1
+            } else {
+                rank := 0
+                
+                if row_domain = search_app_name
+                    rank += 16
+                
+                row_name := csv_row[csv_column_locations["name"]]
+                for word in StrSplit(row_name, delimiters) {
+                    if word = search_app_name {
+                        rank += 8
+                        break
+                    }
+                }
+                for keyword in keywords {
+                    if not StrLen(keyword)
+                        continue
+                    
+                    for word in StrSplit(row_name, delimiters) {
+                        rank += (Max(4 * (word = keyword), 1 * (InStr(word, keyword) > 0)) / Term_Frequencies[word])
+                    }
+                }
+            }
+            
             list_row := csv_row.Clone()
             list_row.Push(rank)
-            if rank
+            if rank > (configuration['Settings']['3_rank_threshold_percentage'] / 100)
                 List_View.Add("Icon" icons[row_domain], list_row*)
         }
     } catch Error {
@@ -560,10 +595,10 @@ search(query := Search_Box.Text) {
         Reload()    
     }
 
-    if keywords.Length > 0
-        List_View.ModifyCol(list_column_locations['rank'], "Integer SortDesc")
-    else
+    if Search_Box.Text = ""
         List_View.ModifyCol(list_column_locations['name'], "Sort")
+    else
+        List_View.ModifyCol(list_column_locations['rank'], "Float SortDesc")
 
     List_View.Modify(1, "Focus Select")
     List_View.Opt("+Redraw")
@@ -583,6 +618,12 @@ move_selector(displacement) {
         new_selector := 1
     List_View.Modify(new_selector, "Vis Focus Select")
 }
+clear_username() {
+    global username := '`0'
+}
+clear_password() {
+    global password := '`0'
+}
 
 copy_account(row) {
     global username, password
@@ -590,8 +631,8 @@ copy_account(row) {
     username := List_View.GetText(row, list_column_locations["username"])
     password := List_View.GetText(row, list_column_locations["password"])
 
-    SetTimer(clear_variable, -1000 * 60 * 5)
-    clear_variable(*) {
+    SetTimer(clear_variables, -1000 * 60 * 5) ; clear after 5 minutes 
+    clear_variables(*) {
         username := '`0'
         password := '`0'
     }
