@@ -35,6 +35,7 @@ if FileExist(config_file) {
 		"Settings", Map(
 			"1_passwords_csv_file", "Locate your passwords CSV file",
 			"2_sync_directory", "# directory to sync your passwords file #",
+            "3_rank_threshold_percentage", "5",
             "4_show_on_launch?", "1",
             "5_run_on_system_startup?", "0"
 		),
