@@ -60,6 +60,7 @@ else
 
 username := '`0'
 password := '`0'
+remember_account := false
 window_titles := []
 
 PM_GUI := Gui("+Resize", "Password Manager")
@@ -69,7 +70,7 @@ PM_GUI.OnEvent("Escape", (*) => (ToolTip(), PM_GUI.Hide()))
 PM_GUI.OnEvent("Size", (GuiObj, MinMax, Width, Height) => MinMax == -1 ? "" : resize_window(Width, Height))
 
 Lens_Button := PM_GUI.AddButton("w25 h23", '')
-Lens_Button.OnEvent("Click", (*) => (PM_GUI.Hide(), lens()))
+Lens_Button.OnEvent("Click", (*) => (PM_GUI.Hide(), (lens() ? "" : show())))
 Lens_Button.Description := "Activate Lens"
 GuiButtonIcon(Lens_Button, "imageres.dll", 169, "S15")
 
@@ -114,8 +115,8 @@ if (col_count != required_columns.Length) {
 
 A_TrayMenu.Delete()
 A_TrayMenu.Add("Password Manager", (*) => (list_all_windows(), show()))
-A_TrayMenu.Add("Find this account", find_current_window)
-A_TrayMenu.Add("Lens", lens)
+A_TrayMenu.Add("Find this account", (*) => find_current_window() ? "" : show())
+A_TrayMenu.Add("Lens", (*) => lens() ? "" : show())
 A_TrayMenu.Add("Settings", open_settings)
 A_TrayMenu.Add("Reload", (*) => Reload())
 A_TrayMenu.Add("Exit", (*) => ExitApp())
@@ -123,12 +124,12 @@ A_TrayMenu.Default := "Password Manager"
 A_TrayMenu.ClickCount := 1
 
 HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
-    Hotkey(configuration['Hotkeys']['1_account_finder_key'], find_current_window)
-    Hotkey(configuration['Hotkeys']['2_lens_key'], lens)
-    Hotkey(configuration['Hotkeys']['3_username_key'], (*) => (username ? SendText(username) : (find_current_window(), SendText(username), clear_username())))
-    Hotkey(configuration['Hotkeys']['4_password_key'], (*) => (password ? SendText(password) : (find_current_window(), SendText(password), clear_password())))
+    Hotkey(configuration['Hotkeys']['1_account_finder_key'], (*) => find_current_window() ? "" : show())
+    Hotkey(configuration['Hotkeys']['2_lens_key'], (*) => lens() ? "" : show())
+    Hotkey(configuration['Hotkeys']['3_username_key'], (*) => ((username ? true : find_current_window()) ? (SendText(username), clear_username()) : ""))
+    Hotkey(configuration['Hotkeys']['4_password_key'], (*) => ((password ? true : find_current_window()) ? (SendText(password), clear_password()) : ""))
 HotIfWinActive("ahk_id " PM_GUI.Hwnd)
-    Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F")), PM_GUI.Hide()))
+    Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F"), true), PM_GUI.Hide()))
     Hotkey('^Enter', (*) => run_website(List_View.GetNext(, "F")))
     Hotkey('F1', (*) => open_account_editor())
     Hotkey('F2', (*) => open_account_editor(List_View.GetNext(, "F")))
@@ -295,8 +296,10 @@ lens(*) {
         copy_account(1)
         ToolTip(List_View.GetText(1, list_column_locations["name"]))
         SetTimer((*) => ToolTip(), -2000)
-    } else
-        show()
+        return true
+    }
+
+    return false
 }
 open_settings(*) {
     global configuration
@@ -497,11 +500,10 @@ find_current_window(*) {
             copy_account(1)
             ToolTip(List_View.GetText(1, list_column_locations["name"]))
             SetTimer((*) => ToolTip(), -2000)
+            return true
         }
-        else
-            show()
-    } else
-        lens()
+    }
+    return lens()
 }
 show(*) {
     if not IsSet(List_View)
@@ -533,7 +535,7 @@ show_descriptions() {
     }
 }
 double_click_account(list, row) {
-    copy_account(row)
+    copy_account(row, true)
     PM_GUI.Hide()
 }
 search(query := Search_Box.Text) {
@@ -620,20 +622,25 @@ move_selector(displacement) {
     List_View.Modify(new_selector, "Vis Focus Select")
 }
 clear_username() {
-    global username := '`0'
+    global remember_account, username
+    if not remember_account
+        username := '`0'
 }
 clear_password() {
-    global password := '`0'
+    global remember_account, password
+    if not remember_account
+        password := '`0'
 }
-
-copy_account(row) {
-    global username, password
+copy_account(row, manual := false) {
+    global username, password, remember_account
     
     username := List_View.GetText(row, list_column_locations["username"])
     password := List_View.GetText(row, list_column_locations["password"])
+    remember_account := manual
 
     SetTimer(clear_variables, -1000 * 60 * 5) ; clear after 5 minutes 
     clear_variables(*) {
+        remember_account := false
         username := '`0'
         password := '`0'
     }
