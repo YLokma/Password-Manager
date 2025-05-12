@@ -203,15 +203,16 @@ loop read configuration['Settings']['1_passwords_csv_file'] {
         continue
     loop parse A_LoopReadLine, "CSV" {
         if (A_Index == csv_column_locations["name"]) {
-            if found_names.Has(A_LoopField)
+            row_name := StrReplace(A_LoopField, "*", "")
+            if found_names.Has(row_name)
                 break
-            for word in StrSplit(A_LoopField, [',', ' ', ';', '.', '-', '@', '(', ')', "'", '"']) {
+            for word in StrSplit(row_name, [',', ' ', ';', '.', '-', '@', '(', ')', "'", '"']) {
                 if Term_Frequencies.Has(word)
                     Term_Frequencies[word] += 1
                 else
                     Term_Frequencies[word] := 1
             }
-            found_names[A_LoopField] := 1
+            found_names[row_name] := 1
         }
     }
 }
@@ -542,6 +543,7 @@ search(query := Search_Box.Text) {
     List_View.Delete()
     List_View.Opt("-Redraw")
     delimiters := [',', ' ', ';', '.', '-', '@', '(', ')', "'", '"']
+    omit_chars := ", `;.-@()'`"*`0`n`r"
 
     if InStr(query, ' -> ') {
         search_app_name := StrSplit(query, ' -> ')[1]
@@ -551,8 +553,6 @@ search(query := Search_Box.Text) {
     } else
         search_app_name := "`0"
     
-    keywords := StrSplit(query, delimiters)
-
     try {
         loop read configuration['Settings']['1_passwords_csv_file'] {
             if A_Index = 1
@@ -568,22 +568,37 @@ search(query := Search_Box.Text) {
             } else {
                 rank := 0
                 
+                row_name := csv_row[csv_column_locations["name"]]
+                if InStr(row_name, '*')
+                    rank += 0.0000000001 ; can distinguish the default account to use
+                row_name := StrReplace(row_name, "*", "")
+                
                 if row_domain = search_app_name
                     rank += 16
                 
-                row_name := csv_row[csv_column_locations["name"]]
                 for word in StrSplit(row_name, delimiters) {
                     if word = search_app_name {
                         rank += 8
                         break
                     }
+                    streak := 0
+                    for char in StrSplit(query,, omit_chars) {
+                        if char = SubStr(word, A_Index, 1)
+                            streak++
+                        else {
+                            streak := 0
+                            break
+                        }
+                    }
+                    loop streak
+                        rank += (1.1 ** A_Index)
                 }
-                for keyword in keywords {
+                for keyword in StrSplit(query, delimiters) {
                     if not StrLen(keyword)
                         continue
-                    
+
                     for word in StrSplit(row_name, delimiters) {
-                        rank += (Max(4 * (word = keyword), 1 * (InStr(word, keyword) > 0)) / Term_Frequencies[word])
+                        rank += (4 * (word = keyword) / Term_Frequencies[word])
                     }
                 }
             }
@@ -733,6 +748,8 @@ csv_format(source) {
 replace_text_in_file(old_text?, new_text?, Filename := configuration['Settings']['1_passwords_csv_file']) {
     try {
         File_Text := FileRead(Filename)
+        header := StrSplit(File_Text, "`n", "`r")[1] "`r`n"
+        File_Text := StrReplace(File_Text, header, "", 1,, 1)
     } catch Error {
         IniWrite("Locate your passwords CSV file", config_file, 'Settings', '1_passwords_csv_file')
         Reload()    
@@ -744,7 +761,7 @@ replace_text_in_file(old_text?, new_text?, Filename := configuration['Settings']
         New_File_Text := File_Text . new_text
     
     FileObj := FileOpen(Filename, "w `n")
-    FileObj.Write(New_File_Text)
+    FileObj.Write(header . Sort(New_File_Text))
     FileObj.Close()
 }
 delete_account(row) {
