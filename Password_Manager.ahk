@@ -590,8 +590,8 @@ search(query := Search_Box.Text) {
                             break
                         }
                     }
-                    loop streak
-                        rank += (1.1 ** A_Index)
+                    if streak
+                        rank += (streak - 0.4 - 0.1 * A_Index) ; adding small weight to the position of the word
                 }
                 for keyword in StrSplit(query, delimiters) {
                     if not StrLen(keyword)
@@ -663,6 +663,7 @@ copy_account(row, manual := false) {
 show_context_menu(row) {
     context_menu := Menu()
     context_menu.Add("Go to website", (*) => run_website(List_View.GetNext(, "F")))
+    context_menu.Add("Toggle default", (*) => toggle_default(List_View.GetNext(, "F")))
     context_menu.Add("Edit", (*) => open_account_editor(List_View.GetNext(, "F")))
     context_menu.Add("Delete", (*) => delete_account(List_View.GetNext(, 'F')))
     context_menu.Show()
@@ -674,6 +675,21 @@ run_website(row) {
         Run url
     else if MsgBox("URL not found, do you want to search for it?", "Invalid URL", "Y/N Icon?") == "Yes"
             Run "https://www.google.com/search?q=" StrReplace(name, ' ', '+')
+}
+toggle_default(row) {
+    ; add or remove an asterisk at the end of the name in the CSV file
+    name := List_View.GetText(row, list_column_locations["name"])
+    if InStr(name, '*')
+        new_name := StrReplace(name, '*', "")
+    else
+        new_name := name "*"
+    
+    old_row_text := csv_format(row)
+    List_View.Modify(row, 'Col' list_column_locations["name"], new_name)
+    new_row_text := csv_format(row)
+    replace_text_in_file(old_row_text, new_row_text)
+    search()
+    sync_file()
 }
 open_account_editor(row?) {
     Account_Editor_GUI := Gui(, "Account Editor")
