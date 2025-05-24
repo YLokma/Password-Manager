@@ -75,7 +75,7 @@ Lens_Button.Description := "Activate Lens"
 GuiButtonIcon(Lens_Button, "imageres.dll", 169, "S15")
 
 Add_Button := PM_GUI.AddButton("w25 h23 yp", '')
-Add_Button.OnEvent("Click", (*) => open_account_editor())
+Add_Button.OnEvent("Click", (*) => New_Account())
 Add_Button.Description := "Add a new account"
 GuiButtonIcon(Add_Button, "imageres.dll", 248, "S15")
 
@@ -116,7 +116,8 @@ if (col_count != required_columns.Length) {
 A_TrayMenu.Delete()
 A_TrayMenu.Add("Password Manager", (*) => (list_all_windows(), show()))
 A_TrayMenu.Add("Find this account", (*) => find_current_window() ? "" : show())
-A_TrayMenu.Add("Lens", (*) => lens() ? "" : show())
+A_TrayMenu.Add("New account", (*) => (list_all_windows(), New_Account()))
+A_TrayMenu.Add("Use Lens", (*) => lens() ? "" : show())
 A_TrayMenu.Add("Settings", open_settings)
 A_TrayMenu.Add("Reload", (*) => Reload())
 A_TrayMenu.Add("Exit", (*) => ExitApp())
@@ -131,7 +132,7 @@ HotIfWinNotActive("ahk_pid " WinGetPID(A_ScriptHwnd))
 HotIfWinActive("ahk_id " PM_GUI.Hwnd)
     Hotkey('Enter', (*) => (copy_account(List_View.GetNext(, "F"), true), PM_GUI.Hide()))
     Hotkey('^Enter', (*) => run_website(List_View.GetNext(, "F")))
-    Hotkey('F1', (*) => open_account_editor())
+    Hotkey('F1', (*) => New_Account())
     Hotkey('F2', (*) => open_account_editor(List_View.GetNext(, "F")))
     Hotkey('F3', (*) => delete_account(List_View.GetNext(, "F")))
     Hotkey('F4', (*) => Search_Box.Focus())
@@ -457,6 +458,7 @@ list_all_windows(*) {
     old_text := Search_Box.Text
 
     global window_titles := []
+
     for window_ID in window_IDs {
         title := WinGetTitle(window_ID)
         app_name := WinGetProcessName(window_ID)
@@ -467,24 +469,80 @@ list_all_windows(*) {
     if not window_titles.Has(1)
         return
     
-    if (InStr(window_titles[1], "Arc.exe -> ")) {
-        WinActivate('ahk_exe Arc.exe')
-        WinwaitActive('ahk_exe Arc.exe')
+    active_app_name := StrSplit(window_titles[1], ' -> ')[1]
+    
+    ; if the active window is a browser, get the current tab URL
+    browser_names := ["chrome.exe", "firefox.exe", "msedge.exe", "brave.exe", "Arc.exe",
+    "vivaldi.exe", "opera.exe", "iridium.exe", "librewolf.exe", "tor.exe", "waterfox.exe",
+    "pale_moon.exe", "epiphany.exe", "midori.exe", "qutebrowser.exe", "lynx.exe", "w3m.exe",
+    "links.exe", "dillo.exe", "surf.exe", "uzbl-browser.exe", "otter-browser.exe", "pale-moon.exe",
+    "k-meleon.exe", "avant.exe", "seamonkey.exe", "netsurf.exe", "arora.exe"]
+    url_regex := "https?:\/\/(www\.)?[a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)" ; explanation on regexr.com
 
-        A_Clipboard := ""
-        loop 2 {
-            Send '^+c'
-            if ClipWait(1)
-                break
+    for browser in browser_names {
+        if (active_app_name = browser) {
+            WinActivate('ahk_exe ' active_app_name)
+            WinwaitActive('ahk_exe ' active_app_name)
+            
+            A_Clipboard := ""
+            loop 2 {
+                Send '^+!c' ; copy current tab title and URL in Arc browser in MD format
+                ; if your browser doesn't support copying the URL, use any extension that allows you to copy the URL with a keyboard shortcut
+                ; like this: https://chromewebstore.google.com/detail/copy-current-url/okkmnbabeggdmakmnffkoflpdlkmmpcp
+                ; or this: https://chromewebstore.google.com/detail/copy-markdown-link/gkceaaphhbeanfciglgpffnncfpipjpa
+                ; or this: https://chromewebstore.google.com/detail/copy-title-and-url-as-mar/fpmbiocnfbjpajgeaicmnjnnokmkehil
+                ; and set their activation shortcut to Ctrl+Alt+Shift+C
+                if ClipWait(1) {
+                    if RegExMatch(A_Clipboard, "\[.+\]\(.+\)") ; check if the clipboard contains a URL in MD format
+                        A_Clipboard := RegExReplace(A_Clipboard, "\[.+\]\((.+)\)", "$1") ; return the URL only
+                    
+                    if RegExMatch(A_Clipboard, url_regex,, 1) ; check if the clipboard contains only a URL
+                        break
+                }
+            }
+            ; the following method works in all browsers, but the focused control loses focus
+            if not RegExMatch(A_Clipboard, url_regex,, 1) {
+                Send '^l' ; focus the address bar
+                A_Clipboard := ""
+                loop 2 {
+                    Send '^c' ; copy the URL
+                    if ClipWait(1)
+                        if RegExMatch(A_Clipboard, url_regex,, 1)
+                            break
+                }
+                Send '^l' ; unfocus the address bar
+            }
+
+            domain := RegExReplace(A_Clipboard, ".*://(.*?)/.*", "$1")
+            window_titles[1] := domain " -> " A_Clipboard
+            break
         }
-
-        domain := RegExReplace(A_Clipboard, ".*://(.*?)/.*", "$1")
-        window_titles[1] := domain " -> " A_Clipboard
     }
     
     Search_Box.Delete()
     Search_Box.Add(window_titles)
     Search_Box.Text := old_text
+}
+New_Account() {
+    global window_titles
+    if not window_titles.Has(1)
+        list_all_windows()
+
+    window_names := []
+    urls := []
+    for window in window_titles {
+        if InStr(window, " -> ") {
+            window := StrSplit(window, ' -> ')
+            window_names.Push(window[1])
+            urls.Push(window[2])
+        }
+    }
+    
+    editor_gui := open_account_editor()
+    editor_gui["name"].Add(window_names)
+    editor_gui["name"].Choose(1)
+    editor_gui["url"].Add(urls)
+    editor_gui["url"].Choose(1)
 }
 find_current_window(*) {
     list_all_windows()
@@ -546,9 +604,10 @@ search(query := Search_Box.Text) {
     omit_chars := ", `;.-@()'`"*`0`n`r"
 
     if InStr(query, ' -> ') {
-        search_app_name := StrSplit(query, ' -> ')[1]
+        pair := StrSplit(query, ' -> ')
+        search_app_name := pair[1]
         if (search_app_name)
-            query := StrReplace(query, search_app_name, "", 1,, 1)
+            query := pair[2]
         search_app_name := StrReplace(search_app_name, ".exe", "", 1,, 1)
     } else
         search_app_name := "`0"
@@ -581,18 +640,26 @@ search(query := Search_Box.Text) {
                         rank += 8
                         break
                     }
-                    streak := 0
-                    for char in StrSplit(query,, omit_chars) {
-                        if char = SubStr(word, A_Index, 1)
-                            streak++
-                        else {
-                            streak := 0
-                            break
+                    word_characters := StrSplit(word,, omit_chars)
+                    if word_characters.Length < 3
+                        continue
+                    for keyword in StrSplit(query, delimiters) {
+                        streak := 0
+                        for char in StrSplit(keyword,, omit_chars) {
+                            if not word_characters.Has(A_Index)
+                                break
+                            if char = word_characters[A_Index]
+                                streak++
+                            else {
+                                streak := streak > 2
+                                break
+                            }
                         }
+                        if streak
+                            rank += (streak - 0.4 - 0.1 * A_Index) / (Term_Frequencies[word] * 2)
                     }
-                    if streak
-                        rank += (streak - 0.4 - 0.1 * A_Index) ; adding small weight to the position of the word
                 }
+                
                 for keyword in StrSplit(query, delimiters) {
                     if not StrLen(keyword)
                         continue
@@ -722,6 +789,7 @@ open_account_editor(row?) {
     
     Account_Editor_GUI.AddButton("yp w97", "Cancel").OnEvent("Click", (*) => Account_Editor_GUI.Destroy())  
     Account_Editor_GUI.Show()
+    return Account_Editor_GUI
     
     submit_account(old_account?) {
         submitted_account := Account_Editor_GUI.Submit()
