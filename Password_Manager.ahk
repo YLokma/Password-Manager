@@ -540,9 +540,9 @@ New_Account() {
     
     editor_gui := open_account_editor()
     editor_gui["name"].Add(window_names)
-    editor_gui["name"].Choose(1)
+    try editor_gui["name"].Choose(1)
     editor_gui["url"].Add(urls)
-    editor_gui["url"].Choose(1)
+    try editor_gui["url"].Choose(1)
 }
 find_current_window(*) {
     list_all_windows()
